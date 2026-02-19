@@ -4,24 +4,24 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
-import { useSupabaseAuth } from "@/lib/SupabaseAuthContext";
+import { useMemberAuth } from "@/lib/MemberAuthContext";
 import LogoutButton from "./LogoutButton";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { user: supabaseUser, isAuthenticated: isSupabaseAuthenticated, isLoading: isSupabaseLoading, signOut } = useSupabaseAuth();
+  const { user: memberUser, isAuthenticated: isMemberAuthenticated, isLoading: isMemberLoading, signOut: memberSignOut } = useMemberAuth();
   const [scrolled, setScrolled] = useState(false);
   
   // Debug auth state
   useEffect(() => {
-    console.log('Header component - Supabase auth state:', {
-      isAuthenticated: isSupabaseAuthenticated,
-      isLoading: isSupabaseLoading,
-      user: supabaseUser ? `${supabaseUser.email} (${supabaseUser.id})` : 'none'
+    console.log('Header component - Member auth state:', {
+      isAuthenticated: isMemberAuthenticated,
+      isLoading: isMemberLoading,
+      user: memberUser ? `${memberUser.email} (${memberUser.id})` : 'none'
     });
-  }, [isSupabaseAuthenticated, isSupabaseLoading, supabaseUser]);
+  }, [isMemberAuthenticated, isMemberLoading, memberUser]);
   
   // Function to check if a path is active
   const isActive = (path) => {
@@ -34,8 +34,8 @@ export default function Header() {
   // Handle resume search button click
   const handleResumeSearchClick = (e) => {
     e.preventDefault();
-    // If user is not authenticated with Supabase, redirect to login page
-    if (!isSupabaseAuthenticated && !isSupabaseLoading) {
+    // If user is not authenticated as member, redirect to login page
+    if (!isMemberAuthenticated && !isMemberLoading) {
       router.push('/auth/member-login');
     } else {
       router.push('/search');
@@ -45,7 +45,7 @@ export default function Header() {
   // Handle sign out
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await memberSignOut();
       // Navigate to the homepage without a full reload to avoid flicker
       router.push('/');
     } catch (error) {
@@ -96,13 +96,13 @@ export default function Header() {
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Supabase User Authentication */}
-            {isSupabaseLoading ? (
+            {/* Member User Authentication */}
+            {isMemberLoading ? (
               <div className="h-8 w-20 animate-pulse rounded-full bg-gray-200"></div>
-            ) : isSupabaseAuthenticated ? (
+            ) : isMemberAuthenticated ? (
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-[#1d1d1f]">
-                  {supabaseUser.email}
+                  {memberUser.email}
                 </span>
                 <button
                   onClick={handleSignOut}

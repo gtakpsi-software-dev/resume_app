@@ -8,9 +8,6 @@ export function middleware(request) {
   // Get the token from cookies (for admin auth)
   const adminToken = request.cookies.get('token')?.value;
   
-  // Check for Supabase auth token in the request headers (set by frontend)
-  const hasSupabaseSession = request.headers.get('x-supabase-auth') === 'true';
-  
   // Define paths that require admin authentication
   const adminRequiredPaths = [
     '/admin/upload',
@@ -25,7 +22,6 @@ export function middleware(request) {
   // Debugging
   console.log('Path:', pathname);
   console.log('Admin Token:', adminToken ? 'Present' : 'Missing');
-  console.log('Supabase Session:', hasSupabaseSession ? 'Present' : 'Missing');
   
   // If the path requires admin auth and there's no admin token, redirect to admin login
   if (requiresAdminAuth && !adminToken) {

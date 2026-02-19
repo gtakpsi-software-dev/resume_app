@@ -1,8 +1,9 @@
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-const { sequelize } = require('./models');
+const connectDB = require('./config/database');
 const routes = require('./routes');
 
 // Initialize express app
@@ -38,9 +39,9 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
   try {
-    // Sync database
-    await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
-    console.log('Database synchronized');
+    // Connect to MongoDB
+    await connectDB();
+    console.log('MongoDB connected');
 
     // Start server
     app.listen(PORT, () => {
@@ -52,4 +53,4 @@ const startServer = async () => {
   }
 };
 
-startServer(); 
+startServer();

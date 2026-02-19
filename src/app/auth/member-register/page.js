@@ -3,12 +3,14 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSupabaseAuth } from "@/lib/SupabaseAuthContext";
+import { useMemberAuth } from "@/lib/MemberAuthContext";
 
 // Registration form component
 function RegistrationForm() {
   const [email, setEmail] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
@@ -16,7 +18,7 @@ function RegistrationForm() {
   const [isLoading, setIsLoading] = useState(false);
   
   const router = useRouter();
-  const { signUp } = useSupabaseAuth();
+  const { signUp } = useMemberAuth();
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,10 +40,15 @@ function RegistrationForm() {
       return;
     }
     
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("First name and last name are required");
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
-      await signUp(email, password, accessCode);
+      await signUp(email, password, firstName, lastName, accessCode);
       router.push("/auth/member-login?registered=true");
     } catch (err) {
       console.error("Registration error:", err);
@@ -100,6 +107,38 @@ function RegistrationForm() {
               onChange={(e) => setConfirmEmail(e.target.value)}
               className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
               placeholder="your@email.com"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="firstName" className="block text-sm font-medium text-[#1d1d1f] mb-1">
+              First name
+            </label>
+            <input
+              id="firstName"
+              name="firstName"
+              type="text"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
+              placeholder="John"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="lastName" className="block text-sm font-medium text-[#1d1d1f] mb-1">
+              Last name
+            </label>
+            <input
+              id="lastName"
+              name="lastName"
+              type="text"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
+              placeholder="Doe"
             />
           </div>
           

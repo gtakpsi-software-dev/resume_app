@@ -1,38 +1,31 @@
 require('dotenv').config();
-const bcrypt = require('bcrypt');
-const { sequelize, User } = require('../models');
+const connectDB = require('../config/database');
+const { User } = require('../models');
 
 async function seed() {
   try {
-    // Sync database
-    await sequelize.sync({ force: false });
+    // Connect to MongoDB
+    await connectDB();
     console.log('Database connected!');
 
-    // Find or create admin user
-    const [user, created] = await User.findOrCreate({
-      where: { email: 'ayangoel91@gmail.com' },
-      defaults: {
-        firstName: 'Admin',
+    // Note: Admin login is handled via password check in authController, not database users
+    // This seed script can be used to create test member users if needed
+
+    // Example: Create a test member user (optional)
+    const testEmail = 'test@example.com';
+    let user = await User.findOne({ email: testEmail });
+
+    if (!user) {
+      user = await User.create({
+        email: testEmail,
+        firstName: 'Test',
         lastName: 'User',
-        role: 'admin',
-        password: 'temp_password' // Temporary, will be updated
-      }
-    });
-
-    // Always hash and update the password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = 'Sasta1234#';
-
-    // Update the user with the new hashed password and ensure role is admin
-    await user.update({
-      password: hashedPassword,
-      role: 'admin' // Ensure role is set to admin
-    });
-
-    if (created) {
-      console.log('Admin user created and password set!');
+        password: 'testpassword123', // Will be hashed by pre-save hook
+        role: 'member'
+      });
+      console.log('Test member user created!');
     } else {
-      console.log('Admin user found and password updated!');
+      console.log('Test member user already exists!');
     }
 
     console.log('Seed completed successfully!');
@@ -44,4 +37,4 @@ async function seed() {
 }
 
 // Run the seed function
-seed(); 
+seed();

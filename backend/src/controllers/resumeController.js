@@ -1,7 +1,7 @@
-const { Resume, Company, Keyword, User, sequelize } = require('../models');
+const { Resume, Company, Keyword, User } = require('../models');
 const { uploadFile, deleteFile, s3Client } = require('../utils/s3');
 const { parseResume } = require('../utils/resumeParser');
-const { Op } = require('sequelize');
+const mongoose = require('mongoose');
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { GetObjectCommand } = require("@aws-sdk/client-s3");
 
@@ -45,9 +45,10 @@ const findOrCreateCompanies = async (companyNames) => {
     // Format company name in title case
     const formattedName = formatTitleCase(name.trim());
     
-    const [company] = await Company.findOrCreate({
-      where: { name: formattedName }
-    });
+    let company = await Company.findOne({ name: formattedName });
+    if (!company) {
+      company = await Company.create({ name: formattedName });
+    }
     companies.push(company);
   }
   return companies;
@@ -59,9 +60,11 @@ const findOrCreateKeywords = async (keywordNames) => {
   
   const keywords = [];
   for (const name of keywordNames) {
-    const [keyword] = await Keyword.findOrCreate({
-      where: { name: name.trim() }
-    });
+    const trimmedName = name.trim();
+    let keyword = await Keyword.findOne({ name: trimmedName });
+    if (!keyword) {
+      keyword = await Keyword.create({ name: trimmedName });
+    }
     keywords.push(keyword);
   }
   return keywords;
@@ -69,7 +72,8 @@ const findOrCreateKeywords = async (keywordNames) => {
 
 // Upload a new resume
 const uploadResume = async (req, res) => {
-  let transaction;
+  const session = await mongoose.startSession();
+  session.startTransaction();
   let s3Key = null;
   let currentStep = 'initialization';
   const originalFilename = req.file?.originalname || 'Unnamed file';
@@ -78,28 +82,27 @@ const uploadResume = async (req, res) => {
     // Log request details for debugging
     console.log(`[${originalFilename}] Starting resume upload. Size: ${req.file?.size || 'unknown'} bytes`);
 
-    currentStep = 'transaction_begin';
-    transaction = await sequelize.transaction();
-    console.log(`[${originalFilename}] Transaction started.`);
-
     currentStep = 'validation';
     if (!req.file) {
       console.error(`[${originalFilename}] Validation failed: No PDF file uploaded.`);
-      // No transaction to rollback here, just return error
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(400).json({ error: true, message: 'No PDF file uploaded.' });
     }
 
     // Check if file buffer is valid
     if (!req.file.buffer || req.file.buffer.length === 0) {
       console.error(`[${originalFilename}] Validation failed: Empty file content.`);
-      await transaction.rollback(); // Rollback transaction
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(400).json({ error: true, message: 'Empty file content.' });
     }
 
     // Check if file is too large (>10MB)
     if (req.file.buffer.length > 10 * 1024 * 1024) {
        console.error(`[${originalFilename}] Validation failed: File too large (${req.file.buffer.length} bytes).`);
-       await transaction.rollback(); // Rollback transaction
+       await session.abortTransaction();
+       await session.endSession();
       return res.status(400).json({ error: true, message: 'File too large. Maximum file size is 10MB.' });
     }
 
@@ -107,7 +110,8 @@ const uploadResume = async (req, res) => {
     const header = req.file.buffer.slice(0, 4).toString();
     if (header !== '%PDF') {
       console.error(`[${originalFilename}] Validation failed: Invalid PDF header "${header}".`);
-      await transaction.rollback(); // Rollback transaction
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(400).json({ error: true, message: 'Invalid PDF file format.' });
     }
     console.log(`[${originalFilename}] Validation successful.`);
@@ -247,8 +251,41 @@ const uploadResume = async (req, res) => {
     } catch (s3Error) {
       // Critical failure: S3 upload failed. We cannot proceed without the file URL.
       console.error(`[${originalFilename}] CRITICAL S3 upload error for key ${s3Key}:`, s3Error);
-      // Throw the error to be caught by the main catch block, triggering rollback
+      await session.abortTransaction();
+      await session.endSession();
       throw new Error(`S3 upload failed: ${s3Error.message}`);
+    }
+
+    // Find or create companies and keywords
+    currentStep = 'associate_companies';
+    let companyIds = [];
+    let keywordIds = [];
+    
+    try {
+      if (uniqueCompanyList.length > 0) {
+        console.log(`[${originalFilename}] Finding/creating ${uniqueCompanyList.length} unique companies...`);
+        const companyObjects = await findOrCreateCompanies(uniqueCompanyList);
+        companyIds = companyObjects.map(c => c._id);
+        console.log(`[${originalFilename}] Companies processed successfully.`);
+      } else {
+        console.log(`[${originalFilename}] No companies to process.`);
+      }
+    } catch (companyError) {
+      console.error(`[${originalFilename}] Error processing companies: ${companyError.message}. Continuing transaction.`, companyError);
+    }
+
+    currentStep = 'associate_keywords';
+    try {
+      if (uniqueKeywordList.length > 0) {
+        console.log(`[${originalFilename}] Finding/creating ${uniqueKeywordList.length} unique keywords...`);
+        const keywordObjects = await findOrCreateKeywords(uniqueKeywordList);
+        keywordIds = keywordObjects.map(k => k._id);
+        console.log(`[${originalFilename}] Keywords processed successfully.`);
+      } else {
+         console.log(`[${originalFilename}] No keywords to process.`);
+      }
+    } catch (keywordError) {
+      console.error(`[${originalFilename}] Error processing keywords: ${keywordError.message}. Continuing transaction.`, keywordError);
     }
 
     // Create resume record
@@ -257,71 +294,37 @@ const uploadResume = async (req, res) => {
 
     let resume;
     try {
-      resume = await Resume.create({
+      resume = await Resume.create([{
         name,
         major,
         graduationYear,
         pdfUrl, // Use the confirmed S3 URL
         s3Key,   // Use the confirmed S3 key
-        uploadedBy: req.user.id
-      }, { transaction });
-      console.log(`[${originalFilename}] Database record created successfully. ID: ${resume.id}`);
+        uploadedBy: req.user.id || 'admin',
+        companies: companyIds,
+        keywords: keywordIds
+      }], { session });
+      resume = resume[0];
+      console.log(`[${originalFilename}] Database record created successfully. ID: ${resume._id}`);
     } catch (dbError) {
       console.error(`[${originalFilename}] Database create error:`, dbError);
-      // Add more specific logging for validation errors
-      if (dbError.name === 'SequelizeValidationError') {
-        console.error(`[${originalFilename}] Validation Errors:`, JSON.stringify(dbError.errors, null, 2));
-      }
-      // Throw error to be caught by main catch block -> triggers rollback & S3 cleanup
+      await session.abortTransaction();
+      await session.endSession();
       throw new Error(`Database create failed: ${dbError.message}`);
-    }
-
-    // Find or create companies and associate with resume
-    currentStep = 'associate_companies';
-    try {
-      if (uniqueCompanyList.length > 0) { // Use unique list
-        console.log(`[${originalFilename}] Associating ${uniqueCompanyList.length} unique companies...`);
-        const companyObjects = await findOrCreateCompanies(uniqueCompanyList); // Use unique list
-        await resume.setCompanies(companyObjects, { transaction });
-        console.log(`[${originalFilename}] Companies associated successfully.`);
-      } else {
-        console.log(`[${originalFilename}] No companies to associate.`);
-      }
-    } catch (companyError) {
-      // Log the error but don't necessarily fail the entire upload
-      console.error(`[${originalFilename}] Error associating companies: ${companyError.message}. Continuing transaction.`, companyError);
-      // Optionally, you could decide to throw here if company association is critical
-    }
-
-    // Find or create keywords and associate with resume
-    currentStep = 'associate_keywords';
-    try {
-      if (uniqueKeywordList.length > 0) { // Use unique list
-        console.log(`[${originalFilename}] Associating ${uniqueKeywordList.length} unique keywords...`);
-        const keywordObjects = await findOrCreateKeywords(uniqueKeywordList); // Use unique list
-        await resume.setKeywords(keywordObjects, { transaction });
-        console.log(`[${originalFilename}] Keywords associated successfully.`);
-      } else {
-         console.log(`[${originalFilename}] No keywords to associate.`);
-      }
-    } catch (keywordError) {
-      // Log the error but don't necessarily fail the entire upload
-      console.error(`[${originalFilename}] Error associating keywords: ${keywordError.message}. Continuing transaction.`, keywordError);
-      // Optionally, you could decide to throw here if keyword association is critical
     }
 
     // Commit transaction
     currentStep = 'transaction_commit';
     console.log(`[${originalFilename}] Committing transaction...`);
-    await transaction.commit();
-    transaction = null; // Clear transaction since it's committed
+    await session.commitTransaction();
+    await session.endSession();
     console.log(`[${originalFilename}] Transaction committed. Upload complete.`);
 
     res.status(201).json({
       error: false,
       message: `Resume "${originalFilename}" uploaded successfully.`,
       data: {
-        id: resume.id,
+        id: resume._id,
         name: resume.name,
         major: resume.major,
         graduationYear: resume.graduationYear,
@@ -335,22 +338,21 @@ const uploadResume = async (req, res) => {
   } catch (error) {
     console.error(`[${originalFilename}] Upload failed at step: ${currentStep}. Error: ${error.message}`);
 
-    // Roll back transaction if it exists and hasn't been committed
-    if (transaction) {
+    // Abort transaction if it exists and hasn't been committed
+    if (session.inTransaction()) {
       try {
-        console.log(`[${originalFilename}] Rolling back transaction due to error...`);
-        await transaction.rollback();
-         console.log(`[${originalFilename}] Transaction rolled back successfully.`);
-      } catch (rollbackError) {
-        console.error(`[${originalFilename}] CRITICAL: Error rolling back transaction:`, rollbackError);
+        console.log(`[${originalFilename}] Aborting transaction due to error...`);
+        await session.abortTransaction();
+         console.log(`[${originalFilename}] Transaction aborted successfully.`);
+      } catch (abortError) {
+        console.error(`[${originalFilename}] CRITICAL: Error aborting transaction:`, abortError);
       }
-    } else {
-       console.log(`[${originalFilename}] No active transaction to roll back (error occurred before or after transaction).`);
     }
+    await session.endSession();
 
     // If we created an S3 file but the database operation failed AFTER S3 upload, try to clean up the S3 file
     // Only attempt delete if s3Key is set AND the error occurred AFTER s3_upload step
-    const errorAfterS3 = ['database_create', 'associate_companies', 'associate_keywords', 'transaction_commit'].includes(currentStep);
+    const errorAfterS3 = ['associate_companies', 'associate_keywords', 'database_create', 'transaction_commit'].includes(currentStep);
     if (s3Key && errorAfterS3) {
       try {
         console.log(`[${originalFilename}] Cleaning up S3 file (${s3Key}) after error...`);
@@ -377,9 +379,9 @@ const uploadResume = async (req, res) => {
     let userMessage = `Error uploading resume "${originalFilename}" during step: ${currentStep}.`;
     if (currentStep === 'resume_parsing') {
       userMessage = `Failed to parse resume content for "${originalFilename}". Please check if the PDF is valid and not password-protected.`;
-    } else if (error.name === 'SequelizeValidationError' || (currentStep === 'database_create' && error.message.includes('null'))) {
+    } else if (currentStep === 'database_create' && error.message.includes('null')) {
       userMessage = `Failed to save resume "${originalFilename}" due to missing required data (e.g., name, major, grad year) after parsing. Check PDF content.`;
-    } else if (error.name === 'SequelizeUniqueConstraintError') {
+    } else if (error.name === 'MongoServerError' && error.code === 11000) {
       userMessage = `A resume similar to "${originalFilename}" might already exist.`;
     } else if (currentStep === 's3_upload' || error.message.includes('S3')) {
       userMessage = `Error storing the file for resume "${originalFilename}". Please try again.`;
@@ -397,122 +399,131 @@ const searchResumes = async (req, res) => {
   try {
     const { query, name, major, company, graduationYear, keyword } = req.query;
     
-    // Base where clause for Resume model
-    const resumeWhere = { isActive: true };
+    // Build MongoDB query
+    const resumeQuery = { isActive: true };
     
-    // Include clauses for associated models
-    const companyInclude = {
-      model: Company,
-      as: 'companies',
-      through: { attributes: [] },
-      required: false // Default to false, might become true if filtered
-    };
-    const keywordInclude = {
-      model: Keyword,
-      as: 'keywords',
-      through: { attributes: [] },
-      required: false // Default to false, might become true if filtered
-    };
-    
-    // Array for OR conditions from the general query
-    const generalQueryOrConditions = [];
+    // General query search (searches across name, major, graduationYear, companies, keywords)
     if (query) {
-      const searchQuery = { [Op.iLike]: `%${query}%` };
-      generalQueryOrConditions.push(
-        { name: searchQuery },
-        { major: searchQuery },
-        { graduationYear: searchQuery },
-        // Use Sequelize's syntax for querying associated models
-        { '$companies.name$': searchQuery },
-        { '$keywords.name$': searchQuery }
-      );
+      const searchRegex = new RegExp(query, 'i');
+      resumeQuery.$or = [
+        { name: searchRegex },
+        { major: searchRegex },
+        { graduationYear: searchRegex }
+      ];
     }
     
-    // --- Specific Filters --- 
-    // Specific name filter
+    // Specific filters
     if (name) {
-      resumeWhere.name = { [Op.iLike]: `%${name}%` };
+      resumeQuery.name = new RegExp(name, 'i');
     }
     
-    // Specific major filter
     if (major) {
       const majorList = major.split(',').map(m => m.trim()).filter(Boolean);
-      if (majorList.length > 0) resumeWhere.major = { [Op.in]: majorList };
+      if (majorList.length === 1) {
+        resumeQuery.major = new RegExp(majorList[0], 'i');
+      } else {
+        resumeQuery.major = { $in: majorList.map(m => new RegExp(m, 'i')) };
+      }
     }
     
-    // Specific graduation year filter
     if (graduationYear) {
       const yearList = graduationYear.split(',').map(y => y.trim()).filter(Boolean);
-      if (yearList.length > 0) resumeWhere.graduationYear = { [Op.in]: yearList };
+      if (yearList.length === 1) {
+        resumeQuery.graduationYear = yearList[0];
+      } else {
+        resumeQuery.graduationYear = { $in: yearList };
+      }
     }
     
-    // Specific company filter
+    // Company filter - need to find companies first, then filter resumes
+    let companyFilter = null;
     if (company) {
       const companyList = company.split(',').map(c => c.trim()).filter(Boolean);
-      if (companyList.length > 0) {
-        companyInclude.where = { name: { [Op.in]: companyList } };
-        companyInclude.required = true; // If filtering by company, it must exist
+      const companies = await Company.find({ 
+        name: { $in: companyList.map(c => new RegExp(c, 'i')) }
+      });
+      if (companies.length > 0) {
+        companyFilter = companies.map(c => c._id);
+      } else {
+        // No matching companies, return empty result
+        return res.status(200).json({
+          error: false,
+          count: 0,
+          data: []
+        });
       }
     }
     
-    // Specific keyword filter
+    // Keyword filter - need to find keywords first, then filter resumes
+    let keywordFilter = null;
     if (keyword) {
       const keywordList = keyword.split(',').map(k => k.trim()).filter(Boolean);
-      if (keywordList.length > 0) {
-        keywordInclude.where = { name: { [Op.in]: keywordList } };
-        keywordInclude.required = true; // If filtering by keyword, it must exist
-      }
-    }
-    
-    // Combine general query OR conditions with other AND conditions
-    if (generalQueryOrConditions.length > 0) {
-      // If there are other conditions in resumeWhere, combine with AND
-      // Otherwise, just use the OR conditions
-      if (Object.keys(resumeWhere).length > 1) { // More than just isActive: true
-        resumeWhere[Op.and] = [
-          { [Op.or]: generalQueryOrConditions },
-          // Include other existing resumeWhere conditions (excluding Op.and/Op.or if they exist)
-          Object.fromEntries(Object.entries(resumeWhere).filter(([key]) => key !== Op.and && key !== Op.or))
-        ];
-        // Remove the original keys that are now inside the Op.and
-        Object.keys(resumeWhere).forEach(key => {
-          if (key !== Op.and && key !== 'isActive') delete resumeWhere[key]; 
-        });
+      const keywords = await Keyword.find({ 
+        name: { $in: keywordList.map(k => new RegExp(k, 'i')) }
+      });
+      if (keywords.length > 0) {
+        keywordFilter = keywords.map(k => k._id);
       } else {
-        // Only isActive and the general query OR conditions
-        resumeWhere[Op.or] = generalQueryOrConditions;
+        // No matching keywords, return empty result
+        return res.status(200).json({
+          error: false,
+          count: 0,
+          data: []
+        });
       }
     }
     
-    // Final include array
-    const finalInclude = [companyInclude, keywordInclude];
+    // Add company and keyword filters to query
+    if (companyFilter) {
+      resumeQuery.companies = { $in: companyFilter };
+    }
     
-    console.log('Final Search Query:', JSON.stringify({ where: resumeWhere, include: finalInclude }, null, 2));
+    if (keywordFilter) {
+      resumeQuery.keywords = { $in: keywordFilter };
+    }
     
-    // Query the database
-    const resumes = await Resume.findAll({
-      where: resumeWhere,
-      include: finalInclude,
-      order: [['createdAt', 'DESC']],
-      // Required when filtering on associated models in the main where clause
-      subQuery: false, 
-      // Required with subQuery:false and includes to avoid duplicates
-      distinct: true, 
-      col: 'id' // Specify the column for DISTINCT count (primary key)
-    });
+    // If general query includes company/keyword search, we need to handle it differently
+    if (query && (query.includes('company') || query.includes('keyword'))) {
+      // This is a simplified approach - for more complex searches, you might want to use aggregation
+      const searchRegex = new RegExp(query, 'i');
+      const matchingCompanies = await Company.find({ name: searchRegex });
+      const matchingKeywords = await Keyword.find({ name: searchRegex });
+      
+      if (matchingCompanies.length > 0 || matchingKeywords.length > 0) {
+        const orConditions = resumeQuery.$or || [];
+        if (matchingCompanies.length > 0) {
+          resumeQuery.$or = [
+            ...orConditions,
+            { companies: { $in: matchingCompanies.map(c => c._id) } }
+          ];
+        }
+        if (matchingKeywords.length > 0) {
+          resumeQuery.$or = [
+            ...(resumeQuery.$or || orConditions),
+            { keywords: { $in: matchingKeywords.map(k => k._id) } }
+          ];
+        }
+      }
+    }
+    
+    console.log('Final Search Query:', JSON.stringify(resumeQuery, null, 2));
+    
+    // Query the database with populate
+    const resumes = await Resume.find(resumeQuery)
+      .populate('companies', 'name')
+      .populate('keywords', 'name')
+      .sort({ createdAt: -1 });
     
     // Generate signed URLs and format the response
     const formattedResumes = await Promise.all(resumes.map(async (resume) => {
       let signedPdfUrl = null;
-      // Need to check if companies/keywords exist on the fetched resume object
-      // as includes might not bring them if they didn't match specific filters
       const associatedCompanies = resume.companies ? resume.companies.map(c => c.name) : [];
       const associatedKeywords = resume.keywords ? resume.keywords.map(k => k.name) : [];
 
       if (resume.s3Key) { // Only generate if s3Key exists
         try {
           const command = new GetObjectCommand({
-            Bucket: process.env.AWS_BUCKET_NAME, // Ensure bucket name is in env
+            Bucket: process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET,
             Key: resume.s3Key,
           });
           // Generate signed URL valid for 15 minutes (adjust as needed)
@@ -524,7 +535,7 @@ const searchResumes = async (req, res) => {
       }
 
       return {
-        id: resume.id,
+        id: resume._id,
         name: resume.name,
         major: resume.major,
         graduationYear: resume.graduationYear,
@@ -543,10 +554,6 @@ const searchResumes = async (req, res) => {
     });
   } catch (error) {
     console.error('Resume search error:', error);
-    // Check for specific Sequelize errors if helpful
-    if (error instanceof sequelize.Error) {
-      console.error('Sequelize Error Details:', error.message);
-    }
     res.status(500).json({ error: true, message: 'Error searching resumes.' });
   }
 };
@@ -556,26 +563,18 @@ const getResumeById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const resume = await Resume.findOne({
-      where: { id, isActive: true },
-      include: [
-        {
-          model: Company,
-          as: 'companies',
-          through: { attributes: [] }
-        },
-        {
-          model: Keyword,
-          as: 'keywords',
-          through: { attributes: [] }
-        },
-        {
-          model: User,
-          as: 'uploader',
-          attributes: ['id', 'firstName', 'lastName', 'email']
-        }
-      ]
-    });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: true, message: 'Invalid resume ID.' });
+    }
+    
+    const resume = await Resume.findOne({ _id: id, isActive: true })
+      .populate('companies', 'name')
+      .populate('keywords', 'name')
+      .populate({
+        path: 'uploadedBy',
+        select: 'firstName lastName email',
+        model: User
+      });
     
     if (!resume) {
       return res.status(404).json({ error: true, message: 'Resume not found.' });
@@ -583,17 +582,17 @@ const getResumeById = async (req, res) => {
     
     // Format the response
     const formattedResume = {
-      id: resume.id,
+      id: resume._id,
       name: resume.name,
       major: resume.major,
       graduationYear: resume.graduationYear,
       pdfUrl: resume.pdfUrl,
-      companies: resume.companies.map(c => c.name),
-      keywords: resume.keywords.map(k => k.name),
-      uploader: resume.uploader ? {
-        id: resume.uploader.id,
-        name: `${resume.uploader.firstName} ${resume.uploader.lastName}`,
-        email: resume.uploader.email
+      companies: resume.companies ? resume.companies.map(c => c.name) : [],
+      keywords: resume.keywords ? resume.keywords.map(k => k.name) : [],
+      uploader: resume.uploadedBy ? {
+        id: resume.uploadedBy._id,
+        name: `${resume.uploadedBy.firstName} ${resume.uploadedBy.lastName}`,
+        email: resume.uploadedBy.email
       } : null,
       createdAt: resume.createdAt,
       updatedAt: resume.updatedAt
@@ -611,27 +610,32 @@ const getResumeById = async (req, res) => {
 
 // Update resume
 const updateResume = async (req, res) => {
-  const transaction = await sequelize.transaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     const { id } = req.params;
     const { name, major, graduationYear, companies, keywords } = req.body;
     
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.abortTransaction();
+      await session.endSession();
+      return res.status(400).json({ error: true, message: 'Invalid resume ID.' });
+    }
+    
     // Find the resume
-    const resume = await Resume.findOne({
-      where: { id, isActive: true },
-      include: [
-        { model: Company, as: 'companies' },
-        { model: Keyword, as: 'keywords' }
-      ]
-    });
+    const resume = await Resume.findOne({ _id: id, isActive: true }).session(session);
     
     if (!resume) {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(404).json({ error: true, message: 'Resume not found.' });
     }
     
     // Check if the user has permission to update this resume
     if (req.user.role !== 'admin' && resume.uploadedBy !== req.user.id) {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(403).json({ error: true, message: 'Permission denied.' });
     }
     
@@ -640,43 +644,40 @@ const updateResume = async (req, res) => {
     if (major) resume.major = major;
     if (graduationYear) resume.graduationYear = graduationYear;
     
-    await resume.save({ transaction });
-    
     // Update companies if provided
     if (companies) {
       const companyList = companies.split(',').map(c => c.trim()).filter(Boolean);
       const companyObjects = await findOrCreateCompanies(companyList);
-      await resume.setCompanies(companyObjects, { transaction });
+      resume.companies = companyObjects.map(c => c._id);
     }
     
     // Update keywords if provided
     if (keywords) {
       const keywordList = keywords.split(',').map(k => k.trim()).filter(Boolean);
       const keywordObjects = await findOrCreateKeywords(keywordList);
-      await resume.setKeywords(keywordObjects, { transaction });
+      resume.keywords = keywordObjects.map(k => k._id);
     }
     
-    // Refresh resume with updated associations
-    await resume.reload({
-      include: [
-        { model: Company, as: 'companies' },
-        { model: Keyword, as: 'keywords' }
-      ],
-      transaction
-    });
+    await resume.save({ session });
     
     // Commit transaction
-    await transaction.commit();
+    await session.commitTransaction();
+    await session.endSession();
+    
+    // Reload with populated fields
+    const updatedResume = await Resume.findById(resume._id)
+      .populate('companies', 'name')
+      .populate('keywords', 'name');
     
     // Format the response
     const formattedResume = {
-      id: resume.id,
-      name: resume.name,
-      major: resume.major,
-      graduationYear: resume.graduationYear,
-      pdfUrl: resume.pdfUrl,
-      companies: resume.companies.map(c => c.name),
-      keywords: resume.keywords.map(k => k.name)
+      id: updatedResume._id,
+      name: updatedResume.name,
+      major: updatedResume.major,
+      graduationYear: updatedResume.graduationYear,
+      pdfUrl: updatedResume.pdfUrl,
+      companies: updatedResume.companies ? updatedResume.companies.map(c => c.name) : [],
+      keywords: updatedResume.keywords ? updatedResume.keywords.map(k => k.name) : []
     };
     
     res.status(200).json({
@@ -686,7 +687,8 @@ const updateResume = async (req, res) => {
     });
   } catch (error) {
     // Roll back transaction on error
-    await transaction.rollback();
+    await session.abortTransaction();
+    await session.endSession();
     
     console.error('Resume update error:', error);
     res.status(500).json({ error: true, message: 'Error updating resume.' });
@@ -695,34 +697,44 @@ const updateResume = async (req, res) => {
 
 // Delete resume
 const deleteResume = async (req, res) => {
-  const transaction = await sequelize.transaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     const { id } = req.params;
     
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.abortTransaction();
+      await session.endSession();
+      return res.status(400).json({ error: true, message: 'Invalid resume ID.' });
+    }
+    
     // Find the resume
-    const resume = await Resume.findOne({
-      where: { id, isActive: true }
-    });
+    const resume = await Resume.findOne({ _id: id, isActive: true }).session(session);
     
     if (!resume) {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(404).json({ error: true, message: 'Resume not found.' });
     }
     
     // Check if the user has permission to delete this resume
     if (req.user.role !== 'admin' && resume.uploadedBy !== req.user.id) {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(403).json({ error: true, message: 'Permission denied.' });
     }
     
     // Soft delete the resume
     resume.isActive = false;
-    await resume.save({ transaction });
+    await resume.save({ session });
     
     // Delete the file from S3
     await deleteFile(resume.s3Key);
     
     // Commit transaction
-    await transaction.commit();
+    await session.commitTransaction();
+    await session.endSession();
     
     res.status(200).json({
       error: false,
@@ -730,7 +742,8 @@ const deleteResume = async (req, res) => {
     });
   } catch (error) {
     // Roll back transaction on error
-    await transaction.rollback();
+    await session.abortTransaction();
+    await session.endSession();
     
     console.error('Resume delete error:', error);
     res.status(500).json({ error: true, message: 'Error deleting resume.' });
@@ -739,29 +752,33 @@ const deleteResume = async (req, res) => {
 
 // Delete all resumes (admin only)
 const deleteAllResumes = async (req, res) => {
-  const transaction = await sequelize.transaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     // Ensure the user is an admin
     if (req.user.role !== 'admin') {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(403).json({ error: true, message: 'Permission denied. Admin access required.' });
     }
     
     // Get all active resumes to delete their S3 files
-    const allResumes = await Resume.findAll({
-      where: { isActive: true },
-      attributes: ['id', 's3Key'],
-      transaction
-    });
+    const allResumes = await Resume.find({ isActive: true })
+      .select('s3Key')
+      .session(session);
     
     if (allResumes.length === 0) {
+      await session.abortTransaction();
+      await session.endSession();
       return res.status(404).json({ error: true, message: 'No active resumes found to delete.' });
     }
     
     // Soft delete all resumes
-    await Resume.update(
+    await Resume.updateMany(
+      { isActive: true },
       { isActive: false },
-      { where: { isActive: true }, transaction }
+      { session }
     );
     
     // Delete all files from S3
@@ -779,7 +796,8 @@ const deleteAllResumes = async (req, res) => {
     await Promise.all(deletePromises);
     
     // Commit transaction
-    await transaction.commit();
+    await session.commitTransaction();
+    await session.endSession();
     
     res.status(200).json({
       error: false,
@@ -787,7 +805,8 @@ const deleteAllResumes = async (req, res) => {
     });
   } catch (error) {
     // Roll back transaction on error
-    await transaction.rollback();
+    await session.abortTransaction();
+    await session.endSession();
     
     console.error('Delete all resumes error:', error);
     res.status(500).json({ error: true, message: 'Error deleting all resumes.' });
@@ -798,59 +817,33 @@ const deleteAllResumes = async (req, res) => {
 const getFilters = async (req, res) => {
   try {
     // Get unique majors
-    const majors = await Resume.findAll({
-      attributes: [[sequelize.fn('DISTINCT', sequelize.col('major')), 'major']],
-      where: { 
-        isActive: true,
-        major: {
-          [Op.not]: ''
-        }
-      },
-      raw: true
+    const majors = await Resume.distinct('major', { 
+      isActive: true,
+      major: { $ne: '', $exists: true }
     });
     
     // Get unique graduation years
-    const graduationYears = await Resume.findAll({
-      attributes: [[sequelize.fn('DISTINCT', sequelize.col('graduationYear')), 'graduationYear']],
-      where: { 
-        isActive: true,
-        graduationYear: {
-          [Op.not]: ''
-        }
-      },
-      raw: true
+    const graduationYears = await Resume.distinct('graduationYear', { 
+      isActive: true,
+      graduationYear: { $ne: '', $exists: true }
     });
     
-    // Get all companies
-    const companies = await Company.findAll({
-      attributes: ['name'],
-      include: [{
-        model: Resume,
-        as: 'resumes',
-        where: { isActive: true },
-        attributes: []
-      }],
-      raw: true
-    });
+    // Get companies that are associated with active resumes
+    const companiesWithResumes = await Company.find({
+      _id: { $in: await Resume.distinct('companies', { isActive: true }) }
+    }).select('name');
     
-    // Get all keywords
-    const keywords = await Keyword.findAll({
-      attributes: ['name'],
-      include: [{
-        model: Resume,
-        as: 'resumes',
-        where: { isActive: true },
-        attributes: []
-      }],
-      raw: true
-    });
+    // Get keywords that are associated with active resumes
+    const keywordsWithResumes = await Keyword.find({
+      _id: { $in: await Resume.distinct('keywords', { isActive: true }) }
+    }).select('name');
     
     // Format the response and filter out empty values
     const filters = {
-      majors: majors.map(m => m.major).filter(Boolean),
-      graduationYears: graduationYears.map(y => y.graduationYear).filter(Boolean),
-      companies: companies.map(c => c.name).filter(Boolean),
-      keywords: keywords.map(k => k.name).filter(Boolean)
+      majors: majors.filter(Boolean).sort(),
+      graduationYears: graduationYears.filter(Boolean).sort(),
+      companies: companiesWithResumes.map(c => c.name).filter(Boolean).sort(),
+      keywords: keywordsWithResumes.map(k => k.name).filter(Boolean).sort()
     };
     
     res.status(200).json({
@@ -871,4 +864,4 @@ module.exports = {
   deleteResume,
   deleteAllResumes,
   getFilters
-}; 
+};

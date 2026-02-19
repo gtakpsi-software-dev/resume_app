@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSupabaseAuth } from '@/lib/SupabaseAuthContext';
+import { useMemberAuth } from '@/lib/MemberAuthContext';
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useSupabaseAuth();
+  const { isAuthenticated, isLoading } = useMemberAuth();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -34,4 +34,4 @@ export default function ProtectedRoute({ children }) {
 
   // If authenticated, render children
   return children;
-} 
+}

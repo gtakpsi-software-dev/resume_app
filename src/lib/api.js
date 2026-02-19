@@ -35,8 +35,9 @@ api.interceptors.response.use(
         if (typeof window !== 'undefined') {
           console.log('Interceptor: Unauthorized, redirecting to login');
           localStorage.removeItem('token');
-          removeCookie('token'); // Assuming removeCookie is defined from previous step
-          window.location.href = '/auth/login'; // Redirect to the correct login page
+          // Clear cookie if exists
+          document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+          window.location.href = '/auth/member-login'; // Redirect to member login page
         }
       }
     }
@@ -48,15 +49,20 @@ api.interceptors.response.use(
 // Auth-related API calls
 export const authAPI = {
   adminLogin: (password) => 
-    api.post('/auth/login', { password }),
+    api.post('/auth/admin/login', { password }),
   
   getCurrentUser: () => 
     api.get('/auth/me'),
 
-  // Legacy functions for backwards compatibility (kept in case used elsewhere)
+  // Member login (email + password)
+  memberLogin: (email, password) => 
+    api.post('/auth/member/login', { email, password }),
+  
+  // Unified login (handles both admin and member)
   login: (email, password) => 
     api.post('/auth/login', { email, password }),
   
+  // Member registration
   register: (userData) => 
     api.post('/auth/register', userData),
 };
