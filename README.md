@@ -14,34 +14,19 @@ A web application for managing and searching through a collection of member resu
 
 - **Frontend**: Next.js with JavaScript and Tailwind CSS
 - **Backend**: Node.js with Express
-- **Database**: PostgreSQL
-- **Storage**: AWS S3
-- **Deployment**: Vercel and AWS EC2
+- **Database**: MongoDB (Mongoose + GridFS for PDFs)
+- **Auth**: JWT (admin + member)
+- **Deployment**: Vercel (frontend), backend TBD
 
 ## Getting Started
 
-### Prerequisites
+**First time on the project?** See **[SETUP.md](./SETUP.md)** for full instructions: env files, API keys, MongoDB, and how to run frontend + backend. The repo does not include `.env` or `.env.local` (they are gitignored).
 
-- Node.js 18+ and npm
+### Quick start (after env is set up)
 
-### Installation
-
-1. Clone the repository
-   ```
-   git clone <repository-url>
-   ```
-
-2. Install dependencies
-   ```
-   npm install
-   ```
-
-3. Run the development server
-   ```
-npm run dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+1. **Backend:** `cd backend && npm install && npm run dev`
+2. **Frontend:** from project root, `npm install && npm run dev`
+3. Open [http://localhost:3000](http://localhost:3000)
 
 ## Usage
 
@@ -54,8 +39,6 @@ npm run dev
 
 ### Admin Access
 
-- Click "Admin Login" from the homepage
-- Use the demo credentials:
-  - Email: admin@example.com
-  - Password: admin123
-- Once logged in, access the upload page to add new resumes
+- Use the "•••" (Admin login) link in the header to open the admin login page.
+- The admin password is configured in the backend; ask a project lead for it (it is not stored in the repo).
+- Once logged in, you can access the upload page to add new resumes.

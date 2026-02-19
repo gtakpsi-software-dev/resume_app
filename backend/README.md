@@ -1,95 +1,58 @@
 # Resume Database Backend
 
-This is the backend API for the Resume Database application. It provides endpoints for uploading, searching, and managing resumes, along with authentication for admin users.
+Express API for the Resume Database: auth (admin + member), resume CRUD, and PDF storage in MongoDB GridFS.
 
-## Technologies Used
+## Tech stack
 
-- Node.js
-- Express.js
-- PostgreSQL
-- Sequelize ORM
-- JWT Authentication
-- AWS S3 for file storage
-- Multer for file uploads
+- Node.js, Express
+- MongoDB (Mongoose) + GridFS for PDFs
+- JWT auth (admin and member)
+- Multer for uploads
+- Optional: Google Gemini for resume parsing
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
+- Node.js 18+
+- MongoDB (Atlas or local)
 
-- Node.js 14+
-- PostgreSQL database
-- AWS S3 bucket and credentials
+## Setup
 
-### Installation
+See the **root [SETUP.md](../SETUP.md)** for full instructions. Summary:
 
-1. Clone the repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Create a `.env` file in the root directory with the following variables:
-   ```
-   # Server Configuration
-   PORT=5000
-   NODE_ENV=development
+1. **Install:** `npm install`
+2. **Env:** Create **`backend/.env`** with at least:
+   - `MONGODB_URI` – connection string (from lead or your Atlas)
+   - `JWT_SECRET` – shared team secret (from lead)
+   - Optional: `GEMINI_API_KEY`, `UPLOAD_LIMIT`
+3. **Run:** `npm run dev`
 
-   # Database Configuration
-   DB_HOST=localhost
-   DB_USER=postgres
-   DB_PASS=postgres
-   DB_NAME=resume_db
-   DB_PORT=5432
+## Scripts
 
-   # JWT Secret
-   JWT_SECRET=your_jwt_secret_key_here
+| Command      | Description                    |
+|-------------|--------------------------------|
+| `npm run dev`  | Start with nodemon             |
+| `npm start`    | Production start               |
+| `npm run seed` | Seed DB (optional test user)   |
 
-   # AWS S3 Configuration
-   AWS_ACCESS_KEY_ID=your_aws_access_key
-   AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-   AWS_REGION=us-east-1
-   AWS_S3_BUCKET=your-resume-bucket
+## API (base path `/api`)
 
-   # Misc
-   UPLOAD_LIMIT=10
-   ```
+### Auth
 
-4. Run database migrations and seed the database:
-   ```
-   npm run seed
-   ```
-
-5. Start the development server:
-   ```
-   npm run dev
-   ```
-
-## API Endpoints
-
-### Authentication
-
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login with email and password
-- `GET /api/auth/profile` - Get current user profile (requires authentication)
+- `POST /auth/admin/login` – admin login (password)
+- `POST /auth/register` – member sign-up (email, password, firstName, lastName, accessCode)
+- `POST /auth/member/login` – member login
+- `POST /auth/login` – unified (admin or member by body shape)
+- `GET /auth/me` – current user (admin or member)
 
 ### Resumes
 
-- `GET /api/resumes/search` - Search resumes with filtering
-- `GET /api/resumes/filters` - Get available filters (majors, companies, years)
-- `GET /api/resumes/:id` - Get resume by ID
-- `POST /api/resumes` - Upload a new resume (requires authentication)
-- `PUT /api/resumes/:id` - Update a resume (requires authentication)
-- `DELETE /api/resumes/:id` - Delete a resume (requires authentication)
+- `GET /resumes/search` – search with query params
+- `GET /resumes/filters` – filter options
+- `GET /resumes/:id` – resume metadata
+- `GET /resumes/:id/file` – stream PDF (GridFS)
+- `POST /resumes` – upload (auth required)
+- `PUT /resumes/:id` – update (auth required)
+- `DELETE /resumes/:id` – soft delete (auth required)
+- `DELETE /resumes/all/delete` – admin only
 
-## Development
-
-### Scripts
-
-- `npm start` - Start the server in production mode
-- `npm run dev` - Start the server in development mode with hot reloading
-- `npm run seed` - Seed the database with initial data
-
-## Default Admin User
-
-After running the seed script, you can login with the following credentials:
-- Email: admin@example.com
-- Password: admin123 
+Admin password and member access code are in the codebase; ask a lead — they are not committed in plain text in docs.
