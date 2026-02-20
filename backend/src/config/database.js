@@ -1,18 +1,18 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// MongoDB connection
 const connectDB = async () => {
   try {
-    // backend/src/config/database.js
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/resume_db';
+    const mongoURI = process.env.MONGODB_URI;
     
     const conn = await mongoose.connect(mongoURI, {
-      // These options are recommended for Mongoose 6+
-      // Remove deprecated options if using older versions
+      // Explicitly force the database name here
+      dbName: 'resume_db', 
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    // Log exactly which database we are using to be 100% sure
+    console.log(`Using Database: ${conn.connection.name}`); 
     return conn;
   } catch (error) {
     console.error('MongoDB connection error:', error);

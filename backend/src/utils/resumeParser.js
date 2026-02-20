@@ -227,7 +227,7 @@ const parseResumeWithGemini = async (text) => {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.5-flash",
       generationConfig: {
         temperature: 0.1,  // Lower temperature for more deterministic output
         maxOutputTokens: 1024,

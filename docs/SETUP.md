@@ -42,9 +42,11 @@ Create **`backend/.env`** with:
 PORT=5000
 NODE_ENV=development
 
-# MongoDB – get the connection string from a project lead (Atlas or shared DB)
-# Format: mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE?retryWrites=true&w=majority
-MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/resume_db?retryWrites=true&w=majority
+# MongoDB – Connection string for the AKPsi Resume App
+# Replace YOUR_USER and YOUR_PASSWORD with your specific Atlas credentials
+MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@gtakpsi-db.fuousxc.mongodb.net/resume_db?retryWrites=true&w=majority&appName=gtakpsi-db
+
+
 
 # JWT – use a long random string (e.g. from https://generate-secret.vercel.app/32)
 # Everyone on the team can use the same value so tokens work across dev machines
