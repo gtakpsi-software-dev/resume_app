@@ -103,6 +103,13 @@ function LoginForm() {
           >
             {isLoading ? 'Signing in...' : 'Sign in'}
           </button>
+
+          <Link
+            href="/auth/login"
+            className="flex justify-center text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors"
+          >
+            Admin Login
+          </Link>
         </div>
       </form>
     </div>

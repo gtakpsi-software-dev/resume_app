@@ -34,11 +34,15 @@ export default function Header() {
   // Handle resume search button click
   const handleResumeSearchClick = (e) => {
     e.preventDefault();
-    // If user is not authenticated as member, redirect to login page
-    if (!isMemberAuthenticated && !isMemberLoading) {
-      router.push('/auth/member-login');
-    } else {
+    // Allow access if member or admin is authenticated.
+    const memberLoggedIn = isMemberAuthenticated && !isMemberLoading;
+    const adminLoggedIn = isAuthenticated && !isLoading;
+
+    if (memberLoggedIn || adminLoggedIn) {
       router.push('/search');
+    } else if (!isMemberLoading && !isLoading) {
+      // Neither member nor admin is logged in – send to member login
+      router.push('/auth/member-login');
     }
   };
 
@@ -97,35 +101,39 @@ export default function Header() {
 
           <div className="flex items-center space-x-4">
             {/* Member User Authentication */}
-            {isMemberLoading ? (
-              <div className="h-8 w-20 animate-pulse rounded-full bg-gray-200"></div>
-            ) : isMemberAuthenticated ? (
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-[#1d1d1f]">
-                  {memberUser.email}
-                </span>
-                <button
-                  onClick={handleSignOut}
-                  className="text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-4">
-                <Link
-                  href="/auth/member-login"
-                  className="text-sm font-medium text-[#0071e3] hover:text-[#0077ed] transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/auth/member-register"
-                  className="text-sm font-medium bg-[#0071e3] text-white hover:bg-[#0077ed] px-3 py-1 rounded-lg transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </div>
+            {!isAuthenticated && (
+              <>
+                {isMemberLoading ? (
+                  <div className="h-8 w-20 animate-pulse rounded-full bg-gray-200"></div>
+                ) : isMemberAuthenticated ? (
+                  <div className="flex items-center space-x-4">
+                    <span className="text-sm text-[#1d1d1f]">
+                      {memberUser.email}
+                    </span>
+                    <button
+                      onClick={handleSignOut}
+                      className="text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-4">
+                    <Link
+                      href="/auth/member-login"
+                      className="text-sm font-medium text-[#0071e3] hover:text-[#0077ed] transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      href="/auth/member-register"
+                      className="text-sm font-medium bg-[#0071e3] text-white hover:bg-[#0077ed] px-3 py-1 rounded-lg transition-colors"
+                    >
+                      Sign Up
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Admin Authentication - keep this separate */}
@@ -134,21 +142,11 @@ export default function Header() {
             ) : isAuthenticated ? (
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-[#1d1d1f]">
-                  {user.firstName} {user.lastName}
+                  Admin Access
                 </span>
                 <LogoutButton />
               </div>
-            ) : (
-              <div className="hidden opacity-60 hover:opacity-100 transition-opacity text-xs text-gray-400 md:block">
-                <Link 
-                  href="/auth/login" 
-                  className="text-xs text-gray-400 hover:text-gray-800"
-                  aria-label="Admin login"
-                >
-                  •••
-                </Link>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
         
