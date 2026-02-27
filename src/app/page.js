@@ -19,9 +19,12 @@ export default function Home() {
               <p className="text-lg text-[#6e6e73] mb-4">
                 Building principled business leaders through professional development, brotherhood, and service since 1904.
               </p>
-              <div className="mb-2">
+              <div className="mt-1 flex flex-wrap gap-3 justify-center lg:justify-start">
                 <Link href="/search" className="btn-apple">
                   Search Resumes
+                </Link>
+                <Link href="/alumni" className="btn-apple-secondary">
+                  View Alumni
                 </Link>
               </div>
             </div>

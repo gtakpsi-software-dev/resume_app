@@ -1,8 +1,19 @@
 import axios from 'axios';
 
+// Normalize backend base URL so it always includes `/api`
+const rawBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const normalizedBaseUrl = (() => {
+  if (!rawBaseUrl) return '';
+  // Remove any trailing slash
+  const trimmed = rawBaseUrl.replace(/\/+$/, '');
+  // If it already ends with /api, use as-is; otherwise append /api
+  if (trimmed.endsWith('/api')) return trimmed;
+  return `${trimmed}/api`;
+})();
+
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BACKEND_URL,
+  baseURL: normalizedBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
