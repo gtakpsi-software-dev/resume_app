@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const connectDB = require('./config/database');
+const { startCleanupJob } = require('./jobs/cleanup');
 const routes = require('./routes');
 
 // Initialize express app
@@ -42,6 +43,9 @@ const startServer = async () => {
     // Connect to MongoDB
     await connectDB();
     console.log('MongoDB connected');
+
+    // Start background cleanup jobs
+    startCleanupJob();
 
     // Start server
     app.listen(PORT, () => {
