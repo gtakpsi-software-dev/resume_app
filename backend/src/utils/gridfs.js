@@ -43,21 +43,74 @@ function uploadFile(buffer, filename, contentType = 'application/pdf') {
 }
 
 /**
- * Delete a file from GridFS by its ObjectId.
- * @param {import('mongodb').ObjectId} fileId
+ * Delete a file from GridFS.
+ * Handles:
+ * - Normal deletion
+ * - "File not found" errors by cleaning up orphaned chunks
+ * - Ensures fileId is a valid ObjectId
+ * @param {import('mongodb').ObjectId | string} fileId
  */
 function deleteFile(fileId) {
   return new Promise((resolve, reject) => {
     const bucket = getBucket();
-    bucket.delete(fileId, (err) => {
-      if (err) {
-        console.error(`Error deleting GridFS file ${fileId}:`, err);
-        reject(err);
-      } else {
-        console.log(`Successfully deleted GridFS file ${fileId}`);
+
+    let objectId;
+    try {
+      objectId = new mongoose.Types.ObjectId(fileId);
+    } catch (err) {
+      console.error(`[GridFS] Invalid fileId provided for deletion: ${fileId}`, err);
+      return reject(err);
+    }
+
+    const handleNotFoundCleanup = async () => {
+      try {
+        const result = await mongoose.connection.db
+          .collection(`${BUCKET_NAME}.chunks`)
+          .deleteMany({ files_id: objectId });
+
+        console.warn(
+          `[GridFS] File not found for ${objectId}. Cleaned up ${result.deletedCount} orphaned chunks.`
+        );
         resolve();
+      } catch (cleanupErr) {
+        console.error(
+          `[GridFS] Error cleaning up orphaned chunks for ${objectId}:`,
+          cleanupErr
+        );
+        reject(cleanupErr);
       }
-    });
+    };
+
+    try {
+      bucket.delete(objectId, async (err) => {
+        if (!err) {
+          console.log(`Successfully deleted GridFS file ${objectId}`);
+          return resolve();
+        }
+
+        const isNotFound =
+          err.code === 'ENOENT' ||
+          (typeof err.message === 'string' && err.message.includes('File not found'));
+
+        if (isNotFound) {
+          return handleNotFoundCleanup();
+        }
+
+        console.error(`Error deleting GridFS file ${objectId}:`, err);
+        return reject(err);
+      });
+    } catch (err) {
+      const isNotFound =
+        err.code === 'ENOENT' ||
+        (typeof err.message === 'string' && err.message.includes('File not found'));
+
+      if (isNotFound) {
+        return handleNotFoundCleanup();
+      }
+
+      console.error(`[GridFS] Synchronous error while deleting file ${objectId}:`, err);
+      return reject(err);
+    }
   });
 }
 

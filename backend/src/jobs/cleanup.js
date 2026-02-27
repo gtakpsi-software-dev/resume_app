@@ -40,26 +40,33 @@ function startCleanupJob() {
       let failureCount = 0;
 
       for (const resume of candidates) {
-        try {
-          // 1. Isolate the GridFS deletion with its own try/catch
-          if (resume.fileId) {
-            try {
-              await deleteFromGridFS(resume.fileId);
-            } catch (gridfsError) {
-              console.warn(
-                `[CleanupJob] GridFS file missing for resume ${resume._id}. Proceeding to delete DB record.`
-              );
-            }
-          }
+        let fileDeleted = false;
 
-          // 2. Safely delete the database document regardless of GridFS success
+        // 1. Try to delete the GridFS file in isolation
+        if (resume.fileId) {
+          try {
+            await deleteFromGridFS(resume.fileId);
+            fileDeleted = true;
+          } catch (gridfsError) {
+            failureCount += 1;
+            console.error(
+              `[CleanupJob] Failed to delete GridFS file for resume ${resume._id} (${resume.name || 'Unnamed'})`,
+              gridfsError
+            );
+          }
+        }
+
+        // 2. Always attempt to delete the MongoDB document, regardless of GridFS outcome
+        try {
           await Resume.findByIdAndDelete(resume._id);
           successCount += 1;
-          
+          console.log(
+            `[CleanupJob] Permanently deleted resume ${resume._id} (${resume.name || 'Unnamed'}). File deleted: ${fileDeleted}.`
+          );
         } catch (err) {
           failureCount += 1;
           console.error(
-            `[CleanupJob] Failed to permanently delete resume ${resume._id} (${resume.name || 'Unnamed'})`,
+            `[CleanupJob] Failed to delete resume document ${resume._id} (${resume.name || 'Unnamed'})`,
             err
           );
         }
