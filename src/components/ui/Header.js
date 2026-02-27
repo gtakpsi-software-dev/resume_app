@@ -83,6 +83,12 @@ export default function Header() {
               >
                 Resume Search
               </Link>
+              <Link 
+                href="/alumni" 
+                className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/alumni')}`}
+              >
+                Alumni
+              </Link>
               
               {isAdmin && (
                 <Link 
@@ -160,6 +166,12 @@ export default function Header() {
             onClick={handleResumeSearchClick}
           >
             Resume Search
+          </Link>
+          <Link 
+            href="/alumni" 
+            className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/alumni')}`}
+          >
+            Alumni
           </Link>
           
           {isAdmin && (
