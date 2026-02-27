@@ -188,24 +188,40 @@ const extractLatestYear = (yearText) => {
 const formatTitleCase = (text) => {
   if (!text) return '';
   
-  // Handle special cases for company abbreviations
-  const commonAbbreviations = ['LLC', 'LLP', 'Inc', 'Corp', 'Ltd', 'Co', 'USA', 'US', 'UK', 'AI', 'IT', 'IBM', 'HP', 'AWS', 'GE'];
+  // 1. Create a dictionary of exact brand spellings
+  const exactBrandNames = {
+    'nvidia': 'NVIDIA',
+    'pwc': 'PwC',
+    'ibm': 'IBM',
+    'aws': 'AWS',
+    'hp': 'HP',
+    'ge': 'GE',
+    'nasa': 'NASA',
+    'gt': 'GT',
+    'llc': 'LLC',
+    'inc': 'Inc',
+    'corp': 'Corp',
+    'github': 'GitHub',
+    'vmware': 'VMware'
+  };
+
   const commonLowercase = ['of', 'the', 'and', 'a', 'an', 'in', 'on', 'at', 'by', 'for', 'with', 'to'];
   
-  // Split by spaces and format each word
   return text.split(' ')
     .map((word, index) => {
-      // Check if the word is a common abbreviation (case sensitive)
-      if (commonAbbreviations.includes(word.toUpperCase())) {
-        return word.toUpperCase();
+      const lowerWord = word.toLowerCase();
+      
+      // 2. Check the dictionary first
+      if (exactBrandNames[lowerWord]) {
+        return exactBrandNames[lowerWord];
       }
       
-      // For articles, prepositions, and conjunctions, keep lowercase unless it's the first word
-      if (index > 0 && commonLowercase.includes(word.toLowerCase())) {
-        return word.toLowerCase();
+      // 3. Keep small words lowercase
+      if (index > 0 && commonLowercase.includes(lowerWord)) {
+        return lowerWord;
       }
       
-      // Default formatting: first letter uppercase, rest lowercase
+      // 4. Default Title Case
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(' ');
@@ -233,6 +249,7 @@ const parseResumeWithGemini = async (text) => {
         maxOutputTokens: 1024,
         topP: 0.8,
         topK: 40,
+        responseMimeType: "application/json",
       },
     });
     
@@ -241,76 +258,60 @@ const parseResumeWithGemini = async (text) => {
     
     // Create detailed prompt for Gemini with more specific instructions
     const prompt = `
-    Extract ONLY the following information from this resume text with extremely high precision:
+    You are an advanced Applicant Tracking System (ATS) expert designed to extract structured data from messy, unstructured PDF text. 
+        
+    Extract the following fields with absolute precision. Output ONLY a valid JSON object.
     
     1. NAME:
-       - Extract the person's full name (typically at the top of the resume in large font)
-       - Include first name and last name, with any middle name/initial
-       - The name should be in the format "FirstName LastName" with proper spacing
-       - The name is almost always the most prominent text at the top of the resume
-       - Examples: "John Smith", "Jane M. Doe", "Robert Johnson"
+       - Extract the candidate's full name. It is usually the first distinct linguistic entity in the text.
+       - Format as Title Case (e.g., "First Last").
     
     2. MAJOR:
-       - Extract ONLY the specific field of study WITHOUT any degree information
-       - DO NOT include "Bachelor of", "Master of", "B.S. in", etc.
-       - Examples:
-         - From "Bachelor of Science in Computer Science" extract ONLY "Computer Science"
-         - From "B.S. in Electrical Engineering" extract ONLY "Electrical Engineering"
-         - From "Master's in Business Administration" extract ONLY "Business Administration"
-       - If there are multiple majors, choose the primary/most recent one
-       - DO NOT include minors, concentrations, or specializations
-       - Look in the Education section for this information
+       - Identify the candidate's primary field of study.
+       - STRICT RULE: Strip all degree classifications (Bachelor of Science, B.S., Master's, Degree in).
+       - Examples: If text says "B.S. in Computer Engineering", output "Computer Engineering". 
     
     3. GRADUATION YEAR:
-       - Extract the LATEST/MOST RECENT graduation year (must be a 4-digit year between 1950-2030)
-       - Look for phrases like "Expected Graduation: 2025", "Class of 2024", "Graduated: 2023"
-       - If you see date ranges like "2020-2024" or "Aug 2021 - May 2025", ALWAYS choose the LATER year (2024, 2025)
-       - For "Present" or "Current", use the current year (2024)
-       - When multiple graduation years exist, ALWAYS use the most recent/latest one
-       - The year must be a valid 4-digit number (e.g., "2023", "2025")
-       - If no valid graduation year is found, leave this field empty
-       - ONLY include the 4-digit year, not any months or other text
+       - Scan the Education section for the latest graduation or expected graduation year.
+       - STRICT RULE: Must be a 4-digit number. If a range is present (2024-2028), extract the end year ("2028").
     
-    4. COMPANIES:
-       - Extract ALL company names from work experience/employment history
-       - Look for sections labeled "Experience", "Work Experience", "Employment"
-       - Companies should be names only - NO locations, titles, or dates
-       - Format company names with proper capitalization (first letter of each word capitalized)
-       - Example capitalization: "Microsoft Corporation", "Apple Inc.", "Amazon Web Services"
-       - DO NOT use all-caps for company names unless they are acronyms like "IBM" or "NASA"
-       - INCLUDE ALL companies listed in work experience
-       - Examples:
-         - From "Microsoft, Seattle, WA" extract ONLY "Microsoft"
-         - From "Apple Inc. (Cupertino, CA)" extract ONLY "Apple Inc."
-         - From "Amazon | Software Engineer" extract ONLY "Amazon"
-       - Be thorough - extract ALL companies from ALL work experiences
+    4. COMPANIES (Semantic Extraction):
+       - Do not rely on line breaks. Scan the text for organizational entities paired with professional, leadership, or technical titles (e.g., Intern, Engineer, Developer, Founder, Lead, Assistant, Member).
+       - Include corporate employers, student project teams, research labs, and startups.
+       - NEGATIVE CONSTRAINTS: 
+         - Do NOT include locations (e.g., "Atlanta, GA", "Remote").
+         - Do NOT include dates or date ranges.
+         - Do NOT include the university name unless the role is explicitly an employee position (like "Undergraduate Research Assistant" or "Teaching Assistant").
+       - Clean suffixes like ", Inc.", " LLC", or " Corp".
     
-    5. SKILLS:
-       - Extract ALL technical skills, programming languages, tools, and technologies
-       - Focus on sections labeled "Skills", "Technical Skills", "Technologies"
-       - Include ALL individual skills as separate items
-       - Examples: "Python", "Java", "React", "Node.js", "AWS", "Docker", "Machine Learning"
-       - Include frameworks, libraries, platforms, and methodologies
-       - Be thorough - extract ALL skills listed in the resume
+    5. KEYWORDS (Skills & Technologies):
+       - Extract all technical skills, programming languages, and hardware/software tools.
+       - Exclude soft skills (e.g., "Leadership", "Communication").
     
-    Format your response as a valid JSON object with these fields:
+    FEW-SHOT EXAMPLES:
+    - Text: "NVIDIA May 2024 - Aug 2024 Santa Clara, CA Developer Tools Software Project Manager Intern"
+      Extracted Company: "NVIDIA"
+    - Text: "PwC Incoming Cloud & Digital SAP Consulting Intern May 2025 - Aug 2025 Boston, MA"
+      Extracted Company: "PwC"
+    - Text: "College of Computing at Georgia Institute of Technology Discrete Mathematics Teaching Assistant Aug 2023 - Current Atlanta, GA"
+      Extracted Company: "Georgia Institute of Technology"
+    - Text: "180 Degrees Consulting Project Manager Jan 2023 - May 2024 Atlanta, GA"
+      Extracted Company: "180 Degrees Consulting"
+    - Text: "Solar Racing Team Strategy Sub Team Member Aug 2022-Jan 2024 Atlanta, GA"
+      Extracted Company: "Solar Racing Team"
+    - Text: "Google Software Engineering Intern Mountain View, CA Summer 2023"
+      Extracted Company: "Google"
+
+    JSON SCHEMA TO RETURN:
     {
       "name": "First Last",
-      "major": "Subject Name Only",
+      "major": "Cleaned Major Name",
       "graduationYear": "YYYY",
-      "companies": ["Company1", "Company2", "Company3"],
-      "keywords": ["Skill1", "Skill2", "Skill3", "Skill4"]
+      "companies": ["Company 1", "Company 2"],
+      "keywords": ["C++", "Java", "FPGA", "ASIC", "React"]
     }
     
-    CRITICAL INSTRUCTIONS:
-    1. Return ONLY valid JSON - no additional text, explanations, or markdown
-    2. For name, use proper capitalization (first letter uppercase, rest lowercase)
-    3. For major, include ONLY the subject name, NO degree information
-    4. For graduationYear, include ONLY the LATEST/MOST RECENT 4-digit year, nothing else
-    5. For companies and keywords, include ALL that you can find
-    6. Ensure companies and keywords are non-empty arrays when possible
-    
-    Resume text:
+    RAW RESUME TEXT:
     ${truncatedText}
     `;
     
