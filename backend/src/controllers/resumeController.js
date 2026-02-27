@@ -661,7 +661,7 @@ const updateResume = async (req, res) => {
   }
 };
 
-// Delete resume
+// Delete resume (soft delete)
 const deleteResume = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -691,14 +691,10 @@ const deleteResume = async (req, res) => {
       return res.status(403).json({ error: true, message: 'Permission denied.' });
     }
     
-    // Soft delete the resume
+    // Soft delete the resume (keep file for delayed cleanup)
     resume.isActive = false;
+    resume.deletedAt = new Date();
     await resume.save({ session });
-    
-    // Delete the file from GridFS
-    if (resume.fileId) {
-      await deleteFromGridFS(resume.fileId).catch(err => console.error('GridFS delete error:', err));
-    }
     
     // Commit transaction
     await session.commitTransaction();
