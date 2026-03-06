@@ -135,4 +135,14 @@ export const keywordAPI = {
     api.post('/keywords', { name }),
 };
 
+// Experience-related API calls (interviews, internships, research)
+export const experienceAPI = {
+  create: (data) => api.post('/experiences', data),
+  getMyExperiences: () => api.get('/experiences'),
+  getAllExperiences: () => api.get('/experiences/all'),
+  update: (id, data) => api.put(`/experiences/${id}`, data),
+  delete: (id) => api.delete(`/experiences/${id}`),
+  toggleBookmark: (id) => api.post(`/experiences/${id}/bookmark`),
+};
+
 export default api; 
