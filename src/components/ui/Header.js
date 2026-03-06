@@ -89,7 +89,7 @@ export default function Header() {
                   href="/dashboard" 
                   className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
                 >
-                  Dashboard
+                  Brother Experiences
                 </Link>
               )}
               
@@ -176,7 +176,7 @@ export default function Header() {
               href="/dashboard" 
               className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
             >
-              Dashboard
+              Brother Experiences
             </Link>
           )}
           

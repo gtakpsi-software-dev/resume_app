@@ -131,6 +131,7 @@ export const experienceAPI = {
   getAllExperiences: () => api.get('/experiences/all'),
   update: (id, data) => api.put(`/experiences/${id}`, data),
   delete: (id) => api.delete(`/experiences/${id}`),
+  toggleBookmark: (id) => api.post(`/experiences/${id}/bookmark`),
 };
 
 export default api; 

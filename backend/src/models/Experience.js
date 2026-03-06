@@ -39,6 +39,21 @@ const experienceSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  contactEmail: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  contactPhone: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  contactLinkedIn: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   companyLogo: {
     type: String,
     trim: true,
@@ -65,6 +80,12 @@ const experienceSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  bookmarkedBy: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+  ],
 }, {
   timestamps: true,
 });

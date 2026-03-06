@@ -3,7 +3,23 @@ const Experience = require('../models/Experience');
 // Create a new experience (interview, internship, or research)
 const createExperience = async (req, res) => {
   try {
-    const { type, company, role, startDate, endDate, outcome, description, companyLogo, rating, sentiment, interviewQuestions, advice } = req.body;
+    const {
+      type,
+      company,
+      role,
+      startDate,
+      endDate,
+      outcome,
+      description,
+      companyLogo,
+      rating,
+      sentiment,
+      interviewQuestions,
+      advice,
+      contactEmail,
+      contactPhone,
+      contactLinkedIn,
+    } = req.body;
     const userId = req.user.id;
 
     if (!type || !company || !role || !startDate) {
@@ -34,6 +50,9 @@ const createExperience = async (req, res) => {
       sentiment: sentiment || '',
       interviewQuestions: interviewQuestions || '',
       advice: advice || '',
+      contactEmail: contactEmail || '',
+      contactPhone: contactPhone || '',
+      contactLinkedIn: contactLinkedIn || '',
     });
 
     await experience.save();
@@ -58,7 +77,7 @@ const getMyExperiences = async (req, res) => {
     const userId = req.user.id;
 
     const experiences = await Experience.find({ user: userId })
-      .sort({ startDate: -1 })
+      .sort({ createdAt: -1, startDate: -1 })
       .lean();
 
     res.status(200).json({
@@ -78,7 +97,8 @@ const getMyExperiences = async (req, res) => {
 const getAllExperiences = async (req, res) => {
   try {
     const experiences = await Experience.find()
-      .sort({ startDate: -1 })
+      .sort({ createdAt: -1, startDate: -1 })
+      .populate('user', 'firstName lastName email')
       .lean();
 
     res.status(200).json({
@@ -98,7 +118,23 @@ const getAllExperiences = async (req, res) => {
 const updateExperience = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type, company, role, startDate, endDate, outcome, description, companyLogo, rating, sentiment, interviewQuestions, advice } = req.body;
+    const {
+      type,
+      company,
+      role,
+      startDate,
+      endDate,
+      outcome,
+      description,
+      companyLogo,
+      rating,
+      sentiment,
+      interviewQuestions,
+      advice,
+      contactEmail,
+      contactPhone,
+      contactLinkedIn,
+    } = req.body;
     const userId = req.user.id;
 
     const experience = await Experience.findOne({ _id: id, user: userId });
@@ -121,6 +157,9 @@ const updateExperience = async (req, res) => {
     if (sentiment !== undefined) experience.sentiment = sentiment || '';
     if (interviewQuestions !== undefined) experience.interviewQuestions = interviewQuestions || '';
     if (advice !== undefined) experience.advice = advice || '';
+    if (contactEmail !== undefined) experience.contactEmail = contactEmail || '';
+    if (contactPhone !== undefined) experience.contactPhone = contactPhone || '';
+    if (contactLinkedIn !== undefined) experience.contactLinkedIn = contactLinkedIn || '';
 
     await experience.save();
 
@@ -134,6 +173,50 @@ const updateExperience = async (req, res) => {
     res.status(500).json({
       error: true,
       message: 'Failed to update experience.',
+    });
+  }
+};
+
+// Toggle bookmark for an experience (any authenticated member)
+const toggleBookmark = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const experience = await Experience.findById(id);
+    if (!experience) {
+      return res.status(404).json({
+        error: true,
+        message: 'Experience not found.',
+      });
+    }
+
+    const alreadyBookmarked = experience.bookmarkedBy?.some(
+      (u) => u.toString() === userId
+    );
+
+    if (alreadyBookmarked) {
+      experience.bookmarkedBy = experience.bookmarkedBy.filter(
+        (u) => u.toString() !== userId
+      );
+    } else {
+      experience.bookmarkedBy = [...(experience.bookmarkedBy || []), userId];
+    }
+
+    await experience.save();
+
+    res.status(200).json({
+      error: false,
+      data: {
+        id: experience._id,
+        bookmarked: !alreadyBookmarked,
+      },
+    });
+  } catch (error) {
+    console.error('Toggle bookmark error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to update bookmark.',
     });
   }
 };
@@ -171,4 +254,5 @@ module.exports = {
   getAllExperiences,
   updateExperience,
   deleteExperience,
+  toggleBookmark,
 };

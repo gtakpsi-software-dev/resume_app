@@ -30,6 +30,10 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
     sentiment,
     interviewQuestions,
     advice,
+    contactEmail,
+    contactPhone,
+    contactLinkedIn,
+    bookmarkedBy,
   } = experience;
 
   const formatDate = (d) => {
@@ -81,7 +85,20 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
     return colors[s] || "text-gray-600";
   };
 
-  const isOwnExperience = currentUserId && String(user) === String(currentUserId);
+  const ownerId =
+    user && typeof user === "object" ? user._id || user.id || user : user;
+  const ownerName =
+    user && typeof user === "object"
+      ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || null
+      : null;
+
+  const isOwnExperience =
+    currentUserId && String(ownerId) === String(currentUserId);
+
+  const isBookmarked =
+    Array.isArray(bookmarkedBy) &&
+    currentUserId &&
+    bookmarkedBy.some((u) => String(u) === String(currentUserId));
 
   const handleDelete = () => {
     if (confirm("Delete this experience?")) onDelete?.(_id);
@@ -93,7 +110,7 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
     <>
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full">
         <div className="p-6 flex-grow">
-          {/* Company & Logo */}
+          {/* Top row: company + bookmark */}
           <div className="flex items-start gap-4 mb-4">
             <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-[#f5f5f7] flex items-center justify-center overflow-hidden">
               {companyLogo ? (
@@ -123,7 +140,24 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
               <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#0071e3]/10 text-[#0071e3]">
                 {typeLabel(type)}
               </span>
+              {ownerName && (
+                <p className="mt-1 text-xs text-[#6e6e73]">
+                  Shared by <span className="font-medium text-[#1d1d1f]">{ownerName}</span>
+                </p>
+              )}
             </div>
+            <button
+              type="button"
+              onClick={() => onToggleBookmark?.(_id)}
+              className="ml-2 inline-flex items-center justify-center rounded-full p-1.5 hover:bg-[#f5f5f7] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
+              aria-label={isBookmarked ? "Remove from saved" : "Save to revisit"}
+            >
+              {isBookmarked ? (
+                <StarIconSolid className="w-5 h-5 text-amber-500" />
+              ) : (
+                <StarIcon className="w-5 h-5 text-[#d2d2d7]" />
+              )}
+            </button>
           </div>
 
           {/* Offer Status */}
@@ -154,6 +188,28 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
               {endDate && ` – ${formatDate(endDate)}`}
             </span>
           </div>
+
+          {/* Contact info */}
+          {(contactEmail || contactPhone || contactLinkedIn) && (
+            <div className="mb-3 text-xs text-[#6e6e73] space-y-1">
+              <p className="font-medium text-[#1d1d1f]">Preferred contact</p>
+              {contactEmail && <p>Email: <span className="font-medium">{contactEmail}</span></p>}
+              {contactPhone && <p>Phone: <span className="font-medium">{contactPhone}</span></p>}
+              {contactLinkedIn && (
+                <p>
+                  LinkedIn:{" "}
+                  <a
+                    href={contactLinkedIn}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-[#0071e3] hover:text-[#0077ed]"
+                  >
+                    View profile
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Rating / Sentiment */}
           {(rating || sentiment) && (
@@ -197,12 +253,20 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
               <span />
             )}
             {isOwnExperience && (
-              <button
-                onClick={handleDelete}
-                className="text-sm text-red-500 hover:text-red-600 font-medium"
-              >
-                Delete
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => onEdit?.(experience)}
+                  className="text-sm text-[#0071e3] hover:text-[#0077ed] font-medium"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="text-sm text-red-500 hover:text-red-600 font-medium"
+                >
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -221,6 +285,11 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
                   {typeLabel(type)} • {formatDate(startDate)}
                   {endDate && ` – ${formatDate(endDate)}`}
                 </p>
+                {ownerName && (
+                  <p className="text-xs text-[#6e6e73] mt-1">
+                    Shared by <span className="font-medium text-[#1d1d1f]">{ownerName}</span>
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setShowFullDetails(false)}
@@ -231,6 +300,30 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {(contactEmail || contactPhone || contactLinkedIn) && (
+                <div>
+                  <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
+                    Preferred contact
+                  </h3>
+                  <div className="text-sm text-[#6e6e73] space-y-1">
+                    {contactEmail && <p>Email: <span className="font-medium">{contactEmail}</span></p>}
+                    {contactPhone && <p>Phone: <span className="font-medium">{contactPhone}</span></p>}
+                    {contactLinkedIn && (
+                      <p>
+                        LinkedIn:{" "}
+                        <a
+                          href={contactLinkedIn}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-[#0071e3] hover:text-[#0077ed]"
+                        >
+                          View profile
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               {description && (
                 <div>
                   <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
