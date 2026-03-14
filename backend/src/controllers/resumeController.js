@@ -714,63 +714,40 @@ const deleteResume = async (req, res) => {
   }
 };
 
-// Delete all resumes (admin only)
+// Delete all resumes (admin only). Soft delete only; GridFS files are removed by a background cron job after 30 days.
 const deleteAllResumes = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
-    // Ensure the user is an admin
     if (req.user.role !== 'admin') {
       await session.abortTransaction();
       await session.endSession();
       return res.status(403).json({ error: true, message: 'Permission denied. Admin access required.' });
     }
-    
-    // Get all active resumes to delete their GridFS files
-    const allResumes = await Resume.find({ isActive: true })
-      .select('fileId')
-      .session(session);
-    
-    if (allResumes.length === 0) {
+
+    const result = await Resume.updateMany(
+      { isActive: true },
+      { $set: { isActive: false, deletedAt: new Date() } },
+      { session }
+    );
+
+    if (result.modifiedCount === 0) {
       await session.abortTransaction();
       await session.endSession();
       return res.status(404).json({ error: true, message: 'No active resumes found to delete.' });
     }
-    
-    // Soft delete all resumes
-    await Resume.updateMany(
-      { isActive: true },
-      { isActive: false },
-      { session }
-    );
-    
-    // Delete all files from GridFS
-    const deletePromises = allResumes.map(resume => {
-      if (resume.fileId) {
-        return deleteFromGridFS(resume.fileId).catch(err => {
-          console.error(`Error deleting GridFS file ${resume.fileId}:`, err);
-          return Promise.resolve();
-        });
-      }
-      return Promise.resolve();
-    });
-    
-    await Promise.all(deletePromises);
-    
-    // Commit transaction
+
     await session.commitTransaction();
     await session.endSession();
-    
+
     res.status(200).json({
       error: false,
-      message: `Successfully deleted ${allResumes.length} resumes.`
+      message: `Successfully soft-deleted ${result.modifiedCount} resume(s). Files will be removed by the background job after 30 days.`
     });
   } catch (error) {
-    // Roll back transaction on error
     await session.abortTransaction();
     await session.endSession();
-    
     console.error('Delete all resumes error:', error);
     res.status(500).json({ error: true, message: 'Error deleting all resumes.' });
   }
