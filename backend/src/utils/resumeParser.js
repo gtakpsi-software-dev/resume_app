@@ -1,5 +1,5 @@
 const pdfParse = require('pdf-parse');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 require('dotenv').config();
 
 /**
@@ -245,12 +245,31 @@ const parseResumeWithGemini = async (text) => {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",
       generationConfig: {
-        temperature: 0.1,  // Lower temperature for more deterministic output
-        maxOutputTokens: 1024,
+        temperature: 0.1,  
+        maxOutputTokens: 8192, // Increased from 1024 to handle large experience arrays
         topP: 0.8,
         topK: 40,
-        responseMimeType: "application/json",
+        responseMimeType: "application/json", 
       },
+      // Disable default filters to prevent false-positive aborts on resumes
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+      ],
     });
     
     // Truncate text if too long (Gemini has context limits)
@@ -308,7 +327,18 @@ const parseResumeWithGemini = async (text) => {
       "major": "Cleaned Major Name",
       "graduationYear": "YYYY",
       "companies": ["Company 1", "Company 2"],
-      "keywords": ["C++", "Java", "FPGA", "ASIC", "React"]
+      "keywords": ["C++", "Java"],
+      "experiences": [
+         {
+           "companyName": "Company 1",
+           "jobTitle": "Role",
+           "industry": "Industry",
+           "technologies": ["Tech 1"],
+           "offerStatus": "Completed",
+           "experienceType": "Internship",
+           "details": "Description of work"
+         }
+      ]
     }
     
     RAW RESUME TEXT:

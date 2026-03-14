@@ -68,6 +68,40 @@ const findOrCreateKeywords = async (keywordNames) => {
   return keywords;
 };
 
+// Sync company names to global Company collection (upsert), return array of IDs
+const ensureCompanies = async (companyNames, session) => {
+  if (!companyNames || !Array.isArray(companyNames) || companyNames.length === 0) return [];
+  const ids = [];
+  for (const raw of companyNames) {
+    const name = formatTitleCase(String(raw).trim());
+    if (!name) continue;
+    const doc = await Company.findOneAndUpdate(
+      { name },
+      { name },
+      { upsert: true, new: true, session }
+    );
+    ids.push(doc._id);
+  }
+  return ids;
+};
+
+// Sync keyword names to global Keyword collection (upsert), return array of IDs
+const ensureKeywords = async (keywordNames, session) => {
+  if (!keywordNames || !Array.isArray(keywordNames) || keywordNames.length === 0) return [];
+  const ids = [];
+  for (const raw of keywordNames) {
+    const name = String(raw).trim();
+    if (!name) continue;
+    const doc = await Keyword.findOneAndUpdate(
+      { name },
+      { name },
+      { upsert: true, new: true, session }
+    );
+    ids.push(doc._id);
+  }
+  return ids;
+};
+
 // Upload a new resume
 const uploadResume = async (req, res) => {
   const session = await mongoose.startSession();
@@ -575,67 +609,58 @@ const getResumeById = async (req, res) => {
   }
 };
 
-// Update resume
+// Update resume (major, graduationYear, companies, keywords). Companies/keywords synced to global collections with upsert.
 const updateResume = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const { id } = req.params;
     const { name, major, graduationYear, companies, keywords } = req.body;
-    
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       await session.abortTransaction();
       await session.endSession();
       return res.status(400).json({ error: true, message: 'Invalid resume ID.' });
     }
-    
-    // Find the resume
+
     const resume = await Resume.findOne({ _id: id, isActive: true }).session(session);
-    
+
     if (!resume) {
       await session.abortTransaction();
       await session.endSession();
       return res.status(404).json({ error: true, message: 'Resume not found.' });
     }
-    
-    // Check if the user has permission to update this resume
+
     if (req.user.role !== 'admin' && resume.uploadedBy !== req.user.id) {
       await session.abortTransaction();
       await session.endSession();
       return res.status(403).json({ error: true, message: 'Permission denied.' });
     }
-    
-    // Update resume fields
+
     if (name) resume.name = name;
-    if (major) resume.major = major;
-    if (graduationYear) resume.graduationYear = graduationYear;
-    
-    // Update companies if provided
-    if (companies) {
-      const companyList = companies.split(',').map(c => c.trim()).filter(Boolean);
-      const companyObjects = await findOrCreateCompanies(companyList);
-      resume.companies = companyObjects.map(c => c._id);
-    }
-    
-    // Update keywords if provided
-    if (keywords) {
-      const keywordList = keywords.split(',').map(k => k.trim()).filter(Boolean);
-      const keywordObjects = await findOrCreateKeywords(keywordList);
-      resume.keywords = keywordObjects.map(k => k._id);
-    }
-    
+    if (major !== undefined) resume.major = major;
+    if (graduationYear !== undefined) resume.graduationYear = graduationYear;
+
+    const companyList = Array.isArray(companies)
+      ? companies.map((c) => String(c).trim()).filter(Boolean)
+      : [];
+    const keywordList = Array.isArray(keywords)
+      ? keywords.map((k) => String(k).trim()).filter(Boolean)
+      : [];
+
+    resume.companies = await ensureCompanies(companyList, session);
+    resume.keywords = await ensureKeywords(keywordList, session);
+
     await resume.save({ session });
-    
-    // Commit transaction
+
     await session.commitTransaction();
     await session.endSession();
-    
-    // Reload with populated fields
+
     const updatedResume = await Resume.findById(resume._id)
       .populate('companies', 'name')
       .populate('keywords', 'name');
-    
+
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const pdfUrl = updatedResume.fileId ? `${baseUrl}/api/resumes/${updatedResume._id}/file` : null;
     const formattedResume = {
@@ -644,14 +669,15 @@ const updateResume = async (req, res) => {
       major: updatedResume.major,
       graduationYear: updatedResume.graduationYear,
       pdfUrl,
-      companies: updatedResume.companies ? updatedResume.companies.map(c => c.name) : [],
-      keywords: updatedResume.keywords ? updatedResume.keywords.map(k => k.name) : []
+      signedPdfUrl: pdfUrl,
+      companies: updatedResume.companies ? updatedResume.companies.map((c) => c.name) : [],
+      keywords: updatedResume.keywords ? updatedResume.keywords.map((k) => k.name) : [],
     };
-    
+
     res.status(200).json({
       error: false,
       message: 'Resume updated successfully.',
-      data: formattedResume
+      data: formattedResume,
     });
   } catch (error) {
     await session.abortTransaction();
