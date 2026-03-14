@@ -195,13 +195,18 @@ export default function Search() {
 
   // Handle delete callback from ResumeCard
   const handleResumeDelete = (deletedId) => {
-    // Update the displayed resumes by filtering out the deleted one
-    setFilteredResumes(prevResumes => 
+    setFilteredResumes(prevResumes =>
       prevResumes.filter(resume => resume.id !== deletedId)
     );
-    
-    // Show success message
     alert('Resume deleted successfully');
+  };
+
+  // Handle save callback from EditResumeModal (refresh card with updated data)
+  const handleResumeSave = (updatedResume) => {
+    if (!updatedResume?.id) return;
+    setFilteredResumes(prev =>
+      prev.map(r => (r.id === updatedResume.id ? updatedResume : r))
+    );
   };
 
   // Add handleNameSearchChange function
@@ -391,11 +396,12 @@ export default function Search() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {sortedResumes.map((resume) => (
-                    <ResumeCard 
-                      key={resume.id} 
-                      resume={resume} 
+                    <ResumeCard
+                      key={resume.id}
+                      resume={resume}
                       isAdmin={user?.role === 'admin'}
                       onDelete={handleResumeDelete}
+                      onSave={handleResumeSave}
                     />
                   ))}
                 </div>

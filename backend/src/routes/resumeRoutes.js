@@ -22,7 +22,7 @@ router.get('/:id', getResumeById);
 
 // Protected routes
 router.post('/', authenticate, upload.single('file'), uploadResume);
-router.put('/:id', authenticate, updateResume);
+router.put('/:id', authenticate, isAdmin, updateResume);
 router.delete('/:id', authenticate, deleteResume);
 router.delete('/all/delete', authenticate, isAdmin, deleteAllResumes);
 

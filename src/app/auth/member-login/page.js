@@ -39,7 +39,10 @@ function LoginForm() {
       router.push(from);
     } catch (err) {
       console.error("Login error:", err);
-      const errorMessage = err.message || "Login failed. Please check your credentials.";
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Login failed. Please check your credentials.";
       setError(errorMessage);
     } finally {
       setIsLoading(false);

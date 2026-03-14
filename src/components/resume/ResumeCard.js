@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/AuthContext";
 import { resumeAPI } from "@/lib/api";
 import { BriefcaseIcon, AcademicCapIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import EditResumeModal from "@/components/EditResumeModal";
 
 // Dynamically import PdfViewer to avoid SSR issues
 const PdfViewer = dynamic(() => import("./PdfViewer"), {
@@ -17,12 +18,13 @@ const PdfViewer = dynamic(() => import("./PdfViewer"), {
   ),
 });
 
-export default function ResumeCard({ resume, onDelete }) {
+export default function ResumeCard({ resume, onDelete, onSave }) {
   const [showPdf, setShowPdf] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const { user } = useAuth();
-  
+
   const isAdmin = user?.role === 'admin';
 
   if (!resume) return null;
@@ -67,14 +69,23 @@ export default function ResumeCard({ resume, onDelete }) {
           <h3 className="text-lg font-semibold text-[#1d1d1f] truncate" title={name}>{name}</h3>
           <div className="ml-2 flex-shrink-0 flex space-x-2">
             {isAdmin && (
-              <button
-                onClick={handleDeleteClick}
-                className="text-xs text-[#ff3b30] hover:text-red-700 transition-colors"
-                disabled={isDeleting}
-                aria-label="Delete resume"
-              >
-                {isDeleting ? '...' : 'Delete'}
-              </button>
+              <>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="text-xs text-[#0071e3] hover:text-[#0077ed] transition-colors"
+                  aria-label="Edit resume"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  className="text-xs text-[#ff3b30] hover:text-red-700 transition-colors"
+                  disabled={isDeleting}
+                  aria-label="Delete resume"
+                >
+                  {isDeleting ? '...' : 'Delete'}
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -145,6 +156,17 @@ export default function ResumeCard({ resume, onDelete }) {
         </div>
       )}
       
+      {isEditing && (
+        <EditResumeModal
+          isOpen={isEditing}
+          onClose={() => setIsEditing(false)}
+          resume={resume}
+          onSave={(updated) => {
+            if (onSave) onSave(updated);
+          }}
+        />
+      )}
+
       {/* Confirmation Dialog */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
