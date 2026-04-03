@@ -94,6 +94,15 @@ export default function Header() {
                 Alumni
               </Link>
               
+              {isMemberAuthenticated && (
+                <Link 
+                  href="/dashboard" 
+                  className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
+                >
+                  Brother Experiences
+                </Link>
+              )}
+              
               {isAdmin && (
                 <Link 
                   href="/admin/upload" 
@@ -171,6 +180,15 @@ export default function Header() {
           >
             Alumni
           </Link>
+          
+          {isMemberAuthenticated && (
+            <Link 
+              href="/dashboard" 
+              className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
+            >
+              Brother Experiences
+            </Link>
+          )}
           
           {isAdmin && (
             <Link 
