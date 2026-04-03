@@ -27,21 +27,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized errors (token expired, etc.)
     if (error.response && error.response.status === 401) {
-      // Check if the failed request was NOT the login request
-      if (error.config.url !== '/auth/login') {
-        // Clear token and redirect to login if we're in a browser context
-        if (typeof window !== 'undefined') {
-          console.log('Interceptor: Unauthorized, redirecting to login');
-          localStorage.removeItem('token');
-          // Clear cookie if exists
-          document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-          window.location.href = '/auth/member-login'; // Redirect to member login page
-        }
+      const url = error.config?.url || '';
+      const isLoginRequest =
+        url.includes('admin/login') ||
+        url.includes('member/login') ||
+        url === '/auth/login';
+      // Do not redirect or clear token when the 401 is from a login attempt (failed login).
+      // Let the login page show the error and stay on the same page.
+      if (!isLoginRequest && typeof window !== 'undefined') {
+        console.log('Interceptor: Unauthorized, redirecting to login');
+        localStorage.removeItem('token');
+        document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        window.location.href = '/auth/member-login';
       }
     }
-    // For login errors, just reject the promise so the calling function can handle it
     return Promise.reject(error);
   }
 );
