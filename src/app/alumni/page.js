@@ -1,48 +1,68 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { resumeAPI } from "@/lib/api";
 
-const dummyAlumni = [
-  {
-    name: "Alex Chen",
-    gradYear: "Spring 2022",
-    company: "McKinsey & Company",
-    email: "alex.chen@example.com",
-    phone: "(555) 123-4567",
-    linkedin: "https://www.linkedin.com/in/alex-chen",
-    instagram: "https://www.instagram.com/alexchen",
-  },
-  {
-    name: "Priya Patel",
-    gradYear: "Fall 2021",
-    company: "Goldman Sachs",
-    email: "priya.patel@example.com",
-    phone: "(555) 987-6543",
-    linkedin: "https://www.linkedin.com/in/priya-patel",
-    instagram: "https://www.instagram.com/priyapatel",
-  },
-  {
-    name: "Michael Johnson",
-    gradYear: "Spring 2020",
-    company: "Google",
-    email: "michael.johnson@example.com",
-    phone: "(555) 246-8101",
-    linkedin: "https://www.linkedin.com/in/michael-johnson",
-    instagram: "https://www.instagram.com/michaeljohnson",
-  },
-  {
-    name: "Sarah Lee",
-    gradYear: "Fall 2019",
-    company: "Deloitte",
-    email: "sarah.lee@example.com",
-    phone: "(555) 369-1215",
-    linkedin: "https://www.linkedin.com/in/sarah-lee",
-    instagram: "https://www.instagram.com/sarahlee",
-  },
-];
+const ALUMNI_CUTOFF_YEAR = 2027;
+
+const extractYear = (value) => {
+  if (!value) return null;
+  const match = String(value).match(/\b(19\d{2}|20\d{2})\b/g);
+  if (!match?.length) return null;
+  const numericYears = match.map(Number).filter((year) => !Number.isNaN(year));
+  if (!numericYears.length) return null;
+  return Math.max(...numericYears);
+};
 
 export default function AlumniPage() {
   const [selectedAlum, setSelectedAlum] = useState(null);
+  const [alumni, setAlumni] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchAlumni = async () => {
+      try {
+        setIsLoading(true);
+        setError("");
+        const response = await resumeAPI.getAll();
+        const resumes = response?.data?.data || [];
+
+        const alumniRecords = resumes
+          .map((resume) => {
+            const gradYear = extractYear(resume.graduationYear);
+            if (!gradYear || gradYear > ALUMNI_CUTOFF_YEAR) return null;
+
+            const companies = Array.isArray(resume.companies) ? resume.companies : [];
+            return {
+              id: resume.id,
+              name: resume.name || "Unknown",
+              gradYear: String(gradYear),
+              currentRole: companies[0] || "",
+              email: resume.email || "",
+              phone: resume.phone || "",
+              linkedin: resume.linkedin || "",
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => Number(b.gradYear) - Number(a.gradYear) || a.name.localeCompare(b.name));
+
+        setAlumni(alumniRecords);
+      } catch (fetchError) {
+        console.error("Failed to fetch alumni from resumes:", fetchError);
+        setError("Unable to load alumni data right now.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAlumni();
+  }, []);
+
+  const hasContactDetails = useMemo(() => {
+    if (!selectedAlum) return false;
+    return Boolean(selectedAlum.email || selectedAlum.phone || selectedAlum.linkedin);
+  }, [selectedAlum]);
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] flex flex-col">
@@ -58,34 +78,46 @@ export default function AlumniPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {dummyAlumni.map((alum) => (
-              <div
-                key={alum.name}
-                className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] p-5 flex flex-col justify-between"
-              >
-                <div>
-                  <h2 className="text-lg font-semibold text-[#1d1d1f] mb-1">
-                    {alum.name}
-                  </h2>
-                  <p className="text-sm text-[#6e6e73] mb-2">
-                    Graduation: <span className="font-medium">{alum.gradYear}</span>
-                  </p>
-                  <p className="text-sm text-[#6e6e73] mb-4">
-                    Current Role:{" "}
-                    <span className="font-medium">{alum.company}</span>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAlum(alum)}
-                  className="mt-3 inline-flex items-center justify-center rounded-full border border-[#d2d2d7] px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] transition-colors"
+          {isLoading ? (
+            <p className="text-center text-sm text-[#6e6e73]">Loading alumni...</p>
+          ) : error ? (
+            <p className="text-center text-sm text-[#d93025]">{error}</p>
+          ) : alumni.length === 0 ? (
+            <p className="text-center text-sm text-[#6e6e73]">
+              No alumni found from resumes with graduation year {ALUMNI_CUTOFF_YEAR} or earlier.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {alumni.map((alum) => (
+                <div
+                  key={alum.id || alum.name}
+                  className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] p-5 flex flex-col justify-between"
                 >
-                  Contact alum
-                </button>
-              </div>
-            ))}
-          </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-[#1d1d1f] mb-1">
+                      {alum.name}
+                    </h2>
+                    <p className="text-sm text-[#6e6e73] mb-2">
+                      Graduation: <span className="font-medium">{alum.gradYear}</span>
+                    </p>
+                    <p className="text-sm text-[#6e6e73] mb-4">
+                      Current Role:{" "}
+                      <span className="font-medium">
+                        {alum.currentRole || "Not found"}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAlum(alum)}
+                    className="mt-3 inline-flex items-center justify-center rounded-full border border-[#d2d2d7] px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] transition-colors"
+                  >
+                    Contact alum
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
@@ -98,7 +130,8 @@ export default function AlumniPage() {
                   Contact {selectedAlum.name}
                 </h2>
                 <p className="text-sm text-[#6e6e73]">
-                  {selectedAlum.gradYear} · {selectedAlum.company}
+                  {selectedAlum.gradYear}
+                  {selectedAlum.currentRole ? ` · ${selectedAlum.currentRole}` : ""}
                 </p>
               </div>
               <button
@@ -111,57 +144,53 @@ export default function AlumniPage() {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                  Email
-                </p>
-                <a
-                  href={`mailto:${selectedAlum.email}`}
-                  className="text-sm text-[#0071e3] hover:text-[#0077ed]"
-                >
-                  {selectedAlum.email}
-                </a>
-              </div>
+              {selectedAlum.email ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
+                    Email
+                  </p>
+                  <a
+                    href={`mailto:${selectedAlum.email}`}
+                    className="text-sm text-[#0071e3] hover:text-[#0077ed]"
+                  >
+                    {selectedAlum.email}
+                  </a>
+                </div>
+              ) : null}
 
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                  Phone
-                </p>
-                <a
-                  href={`tel:${selectedAlum.phone}`}
-                  className="text-sm text-[#1d1d1f]"
-                >
-                  {selectedAlum.phone}
-                </a>
-              </div>
+              {selectedAlum.phone ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
+                    Phone
+                  </p>
+                  <a
+                    href={`tel:${selectedAlum.phone}`}
+                    className="text-sm text-[#1d1d1f]"
+                  >
+                    {selectedAlum.phone}
+                  </a>
+                </div>
+              ) : null}
 
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                  LinkedIn
-                </p>
-                <a
-                  href={selectedAlum.linkedin}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-[#0071e3] hover:text-[#0077ed] break-all"
-                >
-                  {selectedAlum.linkedin}
-                </a>
-              </div>
+              {selectedAlum.linkedin ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
+                    LinkedIn
+                  </p>
+                  <a
+                    href={selectedAlum.linkedin}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-[#0071e3] hover:text-[#0077ed] break-all"
+                  >
+                    {selectedAlum.linkedin}
+                  </a>
+                </div>
+              ) : null}
 
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                  Instagram
-                </p>
-                <a
-                  href={selectedAlum.instagram}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-[#0071e3] hover:text-[#0077ed] break-all"
-                >
-                  {selectedAlum.instagram}
-                </a>
-              </div>
+              {!hasContactDetails ? (
+                <p className="text-sm text-[#6e6e73]">No contact details found.</p>
+              ) : null}
             </div>
           </div>
         </div>

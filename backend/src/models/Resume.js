@@ -17,6 +17,21 @@ const resumeSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    linkedin: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     /** GridFS file ID - references the PDF in MongoDB (resumes.files / resumes.chunks) */
     fileId: {
       type: mongoose.Schema.Types.ObjectId,

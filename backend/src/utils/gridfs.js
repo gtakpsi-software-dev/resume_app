@@ -142,10 +142,28 @@ function streamFileToResponse(fileId, res) {
   });
 }
 
+/**
+ * Download a GridFS file into a Buffer.
+ * @param {import('mongodb').ObjectId} fileId
+ * @returns {Promise<Buffer>}
+ */
+function readFileToBuffer(fileId) {
+  return new Promise((resolve, reject) => {
+    const bucket = getBucket();
+    const chunks = [];
+    const downloadStream = bucket.openDownloadStream(fileId);
+
+    downloadStream.on('data', (chunk) => chunks.push(chunk));
+    downloadStream.on('end', () => resolve(Buffer.concat(chunks)));
+    downloadStream.on('error', reject);
+  });
+}
+
 module.exports = {
   getBucket,
   uploadFile,
   deleteFile,
   streamFileToResponse,
+  readFileToBuffer,
   BUCKET_NAME,
 };
