@@ -38,6 +38,15 @@ const resumeSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  /** Full text extracted from the PDF for search and embedding */
+  rawText: {
+    type: String
+  },
+  /** Vector embedding for semantic search (Voyage AI) */
+  embedding: {
+    type: [Number],
+    index: false // We'll use Atlas Vector Search index instead of standard MongoDB index
   }
 }, {
   timestamps: true

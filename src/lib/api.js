@@ -48,22 +48,22 @@ api.interceptors.response.use(
 
 // Auth-related API calls
 export const authAPI = {
-  adminLogin: (password) => 
+  adminLogin: (password) =>
     api.post('/auth/admin/login', { password }),
-  
-  getCurrentUser: () => 
+
+  getCurrentUser: () =>
     api.get('/auth/me'),
 
   // Member login (email + password)
-  memberLogin: (email, password) => 
+  memberLogin: (email, password) =>
     api.post('/auth/member/login', { email, password }),
-  
+
   // Unified login (handles both admin and member)
-  login: (email, password) => 
+  login: (email, password) =>
     api.post('/auth/login', { email, password }),
-  
+
   // Member registration
-  register: (userData) => 
+  register: (userData) =>
     api.post('/auth/register', userData),
 };
 
@@ -75,11 +75,12 @@ export const resumeAPI = {
     },
   }),
   getAll: (params) => api.get('/resumes/search', { params }),
+  vectorSearch: (query) => api.get('/resumes/vector-search', { params: { query } }),
   getFilters: () => api.get('/resumes/filters'),
   getById: (id) => api.get(`/resumes/${id}`),
   create: (resumeData, file) => {
     const formData = new FormData();
-    
+
     // Add resume metadata if provided
     if (resumeData) {
       Object.keys(resumeData).forEach(key => {
@@ -88,19 +89,19 @@ export const resumeAPI = {
         }
       });
     }
-    
+
     // Add the PDF file
     formData.append('file', file);
-    
+
     return api.post('/resumes', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
   },
-  update: (id, resumeData) => 
+  update: (id, resumeData) =>
     api.put(`/resumes/${id}`, resumeData),
-  delete: (id) => 
+  delete: (id) =>
     api.delete(`/resumes/${id}`),
   deleteAll: () =>
     api.delete('/resumes/all/delete'),
@@ -108,19 +109,19 @@ export const resumeAPI = {
 
 // Companies-related API calls
 export const companyAPI = {
-  getAll: () => 
+  getAll: () =>
     api.get('/companies'),
-  
-  create: (name) => 
+
+  create: (name) =>
     api.post('/companies', { name }),
 };
 
 // Keywords-related API calls
 export const keywordAPI = {
-  getAll: () => 
+  getAll: () =>
     api.get('/keywords'),
-  
-  create: (name) => 
+
+  create: (name) =>
     api.post('/keywords', { name }),
 };
 

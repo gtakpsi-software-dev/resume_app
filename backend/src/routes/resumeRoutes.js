@@ -1,13 +1,14 @@
 const express = require('express');
-const { 
-  uploadResume, 
-  searchResumes, 
-  getResumeById, 
+const {
+  uploadResume,
+  searchResumes,
+  getResumeById,
   getResumeFile,
-  updateResume, 
+  updateResume,
   deleteResume,
   deleteAllResumes,
-  getFilters
+  getFilters,
+  vectorSearch
 } = require('../controllers/resumeController');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Public routes
 router.get('/search', searchResumes);
+router.get('/vector-search', vectorSearch);
 router.get('/filters', getFilters);
 router.get('/:id/file', getResumeFile);  // must be before /:id
 router.get('/:id', getResumeById);
