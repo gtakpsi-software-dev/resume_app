@@ -18,9 +18,9 @@ export default function LogoutButton() {
     <button
       onClick={handleLogout}
       className="text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors"
-      aria-label="Log out of your account"
+      aria-label="Sign out of your account"
     >
-      Logout
+      Sign Out
     </button>
   );
 } 

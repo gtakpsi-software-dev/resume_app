@@ -9,6 +9,7 @@ const {
   deleteAllResumes,
   getFilters,
   vectorSearch
+  backfillResumeContacts,
 } = require('../controllers/resumeController');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -27,5 +28,6 @@ router.post('/', authenticate, upload.single('file'), uploadResume);
 router.put('/:id', authenticate, updateResume);
 router.delete('/:id', authenticate, deleteResume);
 router.delete('/all/delete', authenticate, isAdmin, deleteAllResumes);
+router.post('/backfill/contacts', authenticate, isAdmin, backfillResumeContacts);
 
 module.exports = router; 

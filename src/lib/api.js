@@ -1,8 +1,19 @@
 import axios from 'axios';
 
+// Normalize backend base URL so it always includes `/api`
+const rawBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const normalizedBaseUrl = (() => {
+  if (!rawBaseUrl) return '';
+  // Remove any trailing slash
+  const trimmed = rawBaseUrl.replace(/\/+$/, '');
+  // If it already ends with /api, use as-is; otherwise append /api
+  if (trimmed.endsWith('/api')) return trimmed;
+  return `${trimmed}/api`;
+})();
+
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BACKEND_URL,
+  baseURL: normalizedBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -105,6 +116,8 @@ export const resumeAPI = {
     api.delete(`/resumes/${id}`),
   deleteAll: () =>
     api.delete('/resumes/all/delete'),
+  backfillContacts: () =>
+    api.post('/resumes/backfill/contacts'),
 };
 
 // Companies-related API calls
@@ -123,6 +136,16 @@ export const keywordAPI = {
 
   create: (name) =>
     api.post('/keywords', { name }),
+};
+
+// Experience-related API calls (interviews, internships, research)
+export const experienceAPI = {
+  create: (data) => api.post('/experiences', data),
+  getMyExperiences: () => api.get('/experiences'),
+  getAllExperiences: () => api.get('/experiences/all'),
+  update: (id, data) => api.put(`/experiences/${id}`, data),
+  delete: (id) => api.delete(`/experiences/${id}`),
+  toggleBookmark: (id) => api.post(`/experiences/${id}/bookmark`),
 };
 
 export default api; 

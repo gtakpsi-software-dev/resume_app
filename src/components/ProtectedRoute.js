@@ -3,25 +3,30 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMemberAuth } from '@/lib/MemberAuthContext';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useMemberAuth();
+  const { isAuthenticated: memberIsAuthenticated, isLoading: memberIsLoading } = useMemberAuth();
+  const { isAuthenticated: adminIsAuthenticated, isLoading: adminIsLoading } = useAuth();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+
+  const isChecking = memberIsLoading || adminIsLoading;
+  const isAllowed = memberIsAuthenticated || adminIsAuthenticated;
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (mounted && !isLoading && !isAuthenticated) {
+    if (mounted && !isChecking && !isAllowed) {
       console.log('ProtectedRoute: Not authenticated, redirecting to login');
       router.push('/auth/member-login');
     }
-  }, [isAuthenticated, isLoading, router, mounted]);
+  }, [isAllowed, isChecking, router, mounted]);
 
   // Show loading state or nothing while checking auth
-  if (isLoading || !mounted || !isAuthenticated) {
+  if (isChecking || !mounted || !isAllowed) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse text-center">
@@ -32,6 +37,6 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // If authenticated, render children
+  // If authenticated (member or admin), render children
   return children;
 }
