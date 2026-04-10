@@ -1,8 +1,14 @@
+const path = require('path');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 
-// Secret key for JWT
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    'JWT_SECRET is missing. Set it in backend/.env (see README). If you start the server from the repo root, the app now loads backend/.env explicitly.'
+  );
+}
 
 // Generate a JWT token
 const generateToken = (user) => {

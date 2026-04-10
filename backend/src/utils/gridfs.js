@@ -143,6 +143,30 @@ function streamFileToResponse(fileId, res) {
 }
 
 /**
+ * Stream a file from GridFS to a Buffer.
+ * @param {import('mongodb').ObjectId} fileId
+ * @returns {Promise<Buffer>}
+ */
+function streamFileToBuffer(fileId) {
+  const { PassThrough } = require('stream');
+  return new Promise((resolve, reject) => {
+    const bucket = getBucket();
+    const downloadStream = bucket.openDownloadStream(fileId);
+    const chunks = [];
+    const passThrough = new PassThrough();
+
+    passThrough.on('data', (chunk) => chunks.push(chunk));
+    passThrough.on('end', () => resolve(Buffer.concat(chunks)));
+    passThrough.on('error', reject);
+
+    downloadStream.pipe(passThrough);
+    downloadStream.on('error', (err) => {
+      if (err.code === 'ENOENT' || (err.message && err.message.includes('File not found'))) {
+        reject(new Error('File not found in GridFS'));
+      } else {
+        reject(err);
+      }
+    });
  * Download a GridFS file into a Buffer.
  * @param {import('mongodb').ObjectId} fileId
  * @returns {Promise<Buffer>}
@@ -164,6 +188,7 @@ module.exports = {
   uploadFile,
   deleteFile,
   streamFileToResponse,
+  streamFileToBuffer,
   readFileToBuffer,
   BUCKET_NAME,
 };

@@ -28,8 +28,8 @@ const retryWithBackoff = async (fn, options = {}) => {
       return await fn();
     } catch (error) {
       if (
-        retries >= maxRetries || 
-        !error?.status || 
+        retries >= maxRetries ||
+        !error?.status ||
         (error.status !== 429 && error.status !== 503)
       ) {
         // Not a retriable error or max retries reached
@@ -39,7 +39,7 @@ const retryWithBackoff = async (fn, options = {}) => {
       // Get suggested retry delay if provided by API
       let retryDelay = delay;
       if (error.errorDetails && error.errorDetails.length > 0) {
-        const retryInfo = error.errorDetails.find(detail => 
+        const retryInfo = error.errorDetails.find(detail =>
           detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
         );
         if (retryInfo && retryInfo.retryDelay) {
@@ -53,7 +53,7 @@ const retryWithBackoff = async (fn, options = {}) => {
       console.log(`Rate limit hit. Retrying in ${retryDelay / 1000}s... (Retry ${retries + 1}/${maxRetries})`);
       console.log(`⏳ Please wait - AI service is processing. This may take up to ${Math.ceil(retryDelay / 1000)} seconds...`);
       await sleep(retryDelay);
-      
+
       // Exponential backoff
       delay = Math.min(delay * 2, maxDelay);
       retries++;
@@ -69,42 +69,42 @@ const retryWithBackoff = async (fn, options = {}) => {
 const extractTextFromPdf = async (pdfBuffer) => {
   try {
     console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
-    
+
     // Check if buffer is too small to be a valid PDF
     if (pdfBuffer.length < 100) {
       console.error('PDF buffer too small to be a valid PDF');
       return `Unable to parse PDF content: Buffer too small. This is a fallback text for processing.`;
     }
-    
+
     // Check PDF header - most PDFs start with %PDF
     const header = pdfBuffer.slice(0, 4).toString();
     if (header !== '%PDF') {
       console.error(`Invalid PDF header: ${header}`);
       return `Unable to parse PDF content: Invalid PDF header. This is a fallback text for processing.`;
     }
-    
+
     // Add a timeout to PDF parsing to prevent hanging on corrupt files
     console.log('Starting PDF parsing with timeout protection');
     const pdfParsePromise = pdfParse(pdfBuffer);
-    const timeoutPromise = new Promise((_, reject) => 
+    const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('PDF parsing timed out after 15 seconds')), 15000)
     );
-    
+
     // Race between normal parsing and timeout
     const pdfData = await Promise.race([pdfParsePromise, timeoutPromise]);
-    
+
     // Check if PDF data is valid
     if (!pdfData || typeof pdfData !== 'object') {
       console.error('Invalid PDF data structure returned');
       return `Unable to parse PDF content: Invalid data structure. This is a fallback text for processing.`;
     }
-    
+
     // If text is empty or just whitespace, throw an error
     if (!pdfData.text || pdfData.text.trim().length === 0) {
       console.error('PDF parsing returned empty text');
       throw new Error('PDF parsing returned empty text');
     }
-    
+
     console.log(`PDF successfully parsed: ${pdfData.numpages} pages, ${pdfData.text.length} chars`);
     return pdfData.text;
   } catch (error) {
@@ -112,7 +112,7 @@ const extractTextFromPdf = async (pdfBuffer) => {
     console.error('Error name:', error.name);
     console.error('Error message:', error.message);
     if (error.stack) console.error('Stack trace:', error.stack);
-    
+
     // Return minimal text instead of failing completely
     return `Unable to parse PDF content: ${error.message}. This is a fallback text for processing.`;
   }
@@ -125,7 +125,7 @@ const extractTextFromPdf = async (pdfBuffer) => {
  */
 const formatName = (name) => {
   if (!name) return '';
-  
+
   return name.split(' ')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
@@ -138,7 +138,7 @@ const formatName = (name) => {
  */
 const cleanMajor = (major) => {
   if (!major) return '';
-  
+
   // Remove common degree prefixes
   const cleanedMajor = major
     .replace(/^(Bachelor['']s|Bachelor of|Master['']s|Master of|B\.S\.|B\.A\.|M\.S\.|M\.A\.|Ph\.D\.|Doctor of|Associates|A\.S\.|A\.A\.) (of|in|degree in|degree|on|with a focus in|with concentration in|with specialization in)\s*/i, '')
@@ -149,7 +149,7 @@ const cleanMajor = (major) => {
     .replace(/\s*with (minor|concentration|specialization|focus|honors|track|emphasis)[^\n]*/i, '') // Remove minor info
     .replace(/^(degree|education):\s*/i, '')
     .trim();
-  
+
   return cleanedMajor;
 };
 
@@ -160,22 +160,22 @@ const cleanMajor = (major) => {
  */
 const extractLatestYear = (yearText) => {
   if (!yearText) return '';
-  
+
   // Replace "Present" or "Current" with the current year
   const currentYear = new Date().getFullYear();
   yearText = yearText.replace(/present|current/i, currentYear.toString());
-  
+
   // Extract all 4-digit years between 1950-2030
   const years = [];
   const yearRegex = /\b(19[5-9][0-9]|20[0-2][0-9]|2030)\b/g;
   let match;
-  
+
   while ((match = yearRegex.exec(yearText)) !== null) {
     years.push(parseInt(match[0], 10));
   }
-  
+
   if (years.length === 0) return '';
-  
+
   // Return the latest year as a string
   return Math.max(...years).toString();
 };
@@ -187,6 +187,12 @@ const extractLatestYear = (yearText) => {
  */
 const formatTitleCase = (text) => {
   if (!text) return '';
+
+  // Handle special cases for company abbreviations
+  const commonAbbreviations = ['LLC', 'LLP', 'Inc', 'Corp', 'Ltd', 'Co', 'USA', 'US', 'UK', 'AI', 'IT', 'IBM', 'HP', 'AWS', 'GE'];
+  const commonLowercase = ['of', 'the', 'and', 'a', 'an', 'in', 'on', 'at', 'by', 'for', 'with', 'to'];
+
+  // Split by spaces and format each word
   
   // 1. Create a dictionary of exact brand spellings
   const exactBrandNames = {
@@ -204,8 +210,6 @@ const formatTitleCase = (text) => {
     'github': 'GitHub',
     'vmware': 'VMware'
   };
-
-  const commonLowercase = ['of', 'the', 'and', 'a', 'an', 'in', 'on', 'at', 'by', 'for', 'with', 'to'];
   
   return text.split(' ')
     .map((word, index) => {
@@ -215,13 +219,13 @@ const formatTitleCase = (text) => {
       if (exactBrandNames[lowerWord]) {
         return exactBrandNames[lowerWord];
       }
-      
-      // 3. Keep small words lowercase
-      if (index > 0 && commonLowercase.includes(lowerWord)) {
-        return lowerWord;
+
+      // For articles, prepositions, and conjunctions, keep lowercase unless it's the first word
+      if (index > 0 && commonLowercase.includes(word.toLowerCase())) {
+        return word.toLowerCase();
       }
-      
-      // 4. Default Title Case
+
+      // Default formatting: first letter uppercase, rest lowercase
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(' ');
@@ -260,14 +264,14 @@ const extractContactInfo = (text) => {
 const parseResumeWithGemini = async (text) => {
   // Initialize Gemini API with key from environment variables
   const apiKey = process.env.GEMINI_API_KEY;
-  
+
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY not found in environment variables');
   }
-  
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       generationConfig: {
         temperature: 0.1,  // Lower temperature for more deterministic output
@@ -277,10 +281,10 @@ const parseResumeWithGemini = async (text) => {
         responseMimeType: "application/json",
       },
     });
-    
+
     // Truncate text if too long (Gemini has context limits)
     const truncatedText = text.length > 25000 ? text.substring(0, 25000) : text;
-    
+
     // Create detailed prompt for Gemini with more specific instructions
     const prompt = `
     You are an advanced Applicant Tracking System (ATS) expert designed to extract structured data from messy, unstructured PDF text. 
@@ -339,7 +343,7 @@ const parseResumeWithGemini = async (text) => {
     RAW RESUME TEXT:
     ${truncatedText}
     `;
-    
+
     // Use retry logic with backoff for Gemini API calls
     let response;
     try {
@@ -364,60 +368,60 @@ const parseResumeWithGemini = async (text) => {
         keywords: []
       };
     }
-    
+
     const responseText = response.text();
-    
+
     console.log('Raw Gemini response:', responseText);
-    
+
     // Clean the response text to ensure it's valid JSON
     let jsonStr;
-    
+
     try {
       // Remove markdown code blocks if present
       jsonStr = responseText.replace(/```json|```/g, '').trim();
-      
+
       // Fix common JSON formatting issues
       jsonStr = jsonStr.replace(/(\w+):\s*(?!")/g, '"$1": ');  // Add quotes to keys without them
       jsonStr = jsonStr.replace(/:\s*'([^']*)'/g, ': "$1"');  // Replace single quotes with double quotes
-      
+
       // Ensure the string is a valid JSON object
       if (!jsonStr.startsWith('{')) jsonStr = '{' + jsonStr;
       if (!jsonStr.endsWith('}')) jsonStr = jsonStr + '}';
-      
+
       const parsedResponse = JSON.parse(jsonStr);
       console.log('Parsed response:', parsedResponse);
-      
+
       // Process the extracted data
       const formattedName = formatName(parsedResponse.name || '');
-      
+
       // Clean the major to remove degree information
       const cleanedMajor = cleanMajor(parsedResponse.major || '');
-      
+
       // Validate and clean graduation year
       let graduationYear = parsedResponse.graduationYear || '';
       if (graduationYear) {
         // Extract the latest year if the field contains a range
         graduationYear = extractLatestYear(graduationYear);
-        
+
         // Validate it's a 4-digit number between 1950-2030
-        if (!/^\d{4}$/.test(graduationYear) || 
-            parseInt(graduationYear) < 1950 || 
-            parseInt(graduationYear) > 2030) {
+        if (!/^\d{4}$/.test(graduationYear) ||
+          parseInt(graduationYear) < 1950 ||
+          parseInt(graduationYear) > 2030) {
           graduationYear = '';
         }
       }
-      
+
       // Ensure companies and keywords are arrays
-      const companies = Array.isArray(parsedResponse.companies) 
+      const companies = Array.isArray(parsedResponse.companies)
         ? parsedResponse.companies
-            .filter(Boolean)
-            .map(company => formatTitleCase(company))
+          .filter(Boolean)
+          .map(company => formatTitleCase(company))
         : [];
-      
-      const keywords = Array.isArray(parsedResponse.keywords) 
-        ? parsedResponse.keywords.filter(Boolean) 
+
+      const keywords = Array.isArray(parsedResponse.keywords)
+        ? parsedResponse.keywords.filter(Boolean)
         : [];
-      
+
       console.log('Processed data:', {
         name: formattedName,
         major: cleanedMajor,
@@ -425,7 +429,7 @@ const parseResumeWithGemini = async (text) => {
         companies,
         keywords
       });
-      
+
       return {
         name: formattedName,
         major: cleanedMajor,
@@ -439,30 +443,30 @@ const parseResumeWithGemini = async (text) => {
     } catch (jsonError) {
       console.error('Error parsing JSON from Gemini response:', jsonError);
       console.error('Raw response:', responseText);
-      
+
       // Try to extract data with regex as fallback
       const nameMatch = responseText.match(/"name"\s*:\s*"([^"]+)"/);
       const majorMatch = responseText.match(/"major"\s*:\s*"([^"]+)"/);
       const yearMatch = responseText.match(/"graduationYear"\s*:\s*"([^"]+)"/);
-      
+
       let extractedName = nameMatch ? nameMatch[1] : '';
       extractedName = formatName(extractedName);
-      
+
       let extractedMajor = majorMatch ? majorMatch[1] : '';
       extractedMajor = cleanMajor(extractedMajor);
-      
+
       let extractedYear = yearMatch ? yearMatch[1].replace(/[^0-9]/g, '') : '';
       extractedYear = extractLatestYear(extractedYear);
-      if (!/^\d{4}$/.test(extractedYear) || 
-          parseInt(extractedYear) < 1950 || 
-          parseInt(extractedYear) > 2030) {
+      if (!/^\d{4}$/.test(extractedYear) ||
+        parseInt(extractedYear) < 1950 ||
+        parseInt(extractedYear) > 2030) {
         extractedYear = '';
       }
-      
+
       // Try to extract arrays with regex
       let companies = [];
       let keywords = [];
-      
+
       try {
         const companiesMatch = responseText.match(/"companies"\s*:\s*\[(.*?)\]/s);
         if (companiesMatch && companiesMatch[1]) {
@@ -472,7 +476,7 @@ const parseResumeWithGemini = async (text) => {
             .filter(Boolean)
             .map(company => formatTitleCase(company));
         }
-        
+
         const keywordsMatch = responseText.match(/"keywords"\s*:\s*\[(.*?)\]/s);
         if (keywordsMatch && keywordsMatch[1]) {
           keywords = keywordsMatch[1]
@@ -483,7 +487,7 @@ const parseResumeWithGemini = async (text) => {
       } catch (regexError) {
         console.error('Error extracting arrays with regex:', regexError);
       }
-      
+
       return {
         name: extractedName,
         major: extractedMajor,
@@ -497,7 +501,7 @@ const parseResumeWithGemini = async (text) => {
     }
   } catch (error) {
     console.error('Error parsing resume with Gemini:', error);
-    
+
     // Return empty data rather than failing completely
     return {
       name: '',
@@ -534,10 +538,10 @@ const parseResume = async (fileBuffer, name) => {
         keywords: []
       };
     }
-    
+
     // Extract text from PDF
     const text = await extractTextFromPdf(fileBuffer);
-    
+
     // If text extraction returned error message (our fallback), create default response
     if (text.startsWith('Unable to parse PDF content:')) {
       console.warn('Using fallback data due to PDF parsing error');
@@ -552,7 +556,7 @@ const parseResume = async (fileBuffer, name) => {
         keywords: []
       };
     }
-    
+
     // Parse with Gemini AI
     const result = await parseResumeWithGemini(text);
     const contactInfo = extractContactInfo(text);

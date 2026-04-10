@@ -23,11 +23,11 @@ export default function Search() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // State for fetched data
-  const [availableFilters, setAvailableFilters] = useState({ 
-    majors: [], 
-    companies: [], 
+  const [availableFilters, setAvailableFilters] = useState({
+    majors: [],
+    companies: [],
     graduationYears: [],
     keywords: []
   });
@@ -39,6 +39,9 @@ export default function Search() {
 
   // Add state for general search
   const [generalSearch, setGeneralSearch] = useState("");
+
+  // Add state for search mode
+  const [searchMode, setSearchMode] = useState("keyword"); // "keyword" or "semantic"
 
   // Fetch available filters on mount
   useEffect(() => {
@@ -77,31 +80,48 @@ export default function Search() {
       setLoading(true);
       setError(null);
       try {
-        // Build query parameters
-        const params = {
-          query: generalSearch || undefined, // Add general search parameter
-          name: nameSearch || undefined,
-          major: filters.major.length > 0 ? filters.major.join(',') : undefined,
-          company: filters.company.length > 0 ? filters.company.join(',') : undefined,
-          graduationYear: filters.graduationYear.length > 0 ? filters.graduationYear.join(',') : undefined,
-          keyword: filters.keyword.length > 0 ? filters.keyword.join(',') : undefined,
-        };
-        
-        // Remove undefined params
-        Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+        if (searchMode === "semantic" && generalSearch) {
+          // Perform semantic search
+          resumeAPI.vectorSearch(generalSearch)
+            .then(({ data }) => {
+              setFilteredResumes(data.data || []);
+            })
+            .catch(err => {
+              console.error("Failed to fetch resumes (semantic):", err);
+              const errorMessage = err.response?.data?.message || "Failed to load resumes. Please try again later.";
+              setError(errorMessage);
+              setFilteredResumes([]);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        } else {
+          // Build query parameters for traditional search
+          const params = {
+            query: generalSearch || undefined, // Add general search parameter
+            name: nameSearch || undefined,
+            major: filters.major.length > 0 ? filters.major.join(',') : undefined,
+            company: filters.company.length > 0 ? filters.company.join(',') : undefined,
+            graduationYear: filters.graduationYear.length > 0 ? filters.graduationYear.join(',') : undefined,
+            keyword: filters.keyword.length > 0 ? filters.keyword.join(',') : undefined,
+          };
 
-        resumeAPI.getAll(params)
-          .then(({ data }) => {
-            setFilteredResumes(data.data || []);
-          })
-          .catch(err => {
-            console.error("Failed to fetch resumes:", err);
-            setError("Failed to load resumes. Please try again later.");
-            setFilteredResumes([]);
-          })
-          .finally(() => {
-            setLoading(false);
-          });
+          // Remove undefined params
+          Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+          resumeAPI.getAll(params)
+            .then(({ data }) => {
+              setFilteredResumes(data.data || []);
+            })
+            .catch(err => {
+              console.error("Failed to fetch resumes:", err);
+              setError("Failed to load resumes. Please try again later.");
+              setFilteredResumes([]);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        }
       } catch (err) {
         console.error("Failed to fetch resumes:", err);
         setError("Failed to load resumes. Please try again later.");
@@ -109,11 +129,11 @@ export default function Search() {
         setLoading(false);
       }
     }, 300);
-    
+
     handler();
-    
+
     return handler;
-  }, [filters, nameSearch, generalSearch]);
+  }, [filters, nameSearch, generalSearch, searchMode]);
 
   // Fetch resumes whenever filters change
   useEffect(() => {
@@ -123,7 +143,7 @@ export default function Search() {
   const handleFilterChange = (filterType, value) => {
     setFilters(prevFilters => {
       const currentValues = [...prevFilters[filterType]];
-      
+
       if (currentValues.includes(value)) {
         // Remove the value if it's already selected
         return {
@@ -139,35 +159,35 @@ export default function Search() {
       }
     });
   };
-  
+
   const handleFilterSearchChange = (filterType, value) => {
     setFilterSearch({
       ...filterSearch,
       [filterType]: value
     });
   };
-  
+
   // Helper function to filter the items based on search
   const getFilteredItems = (items, filterType) => {
     // First ensure items are unique
     const uniqueItems = [...new Set(items)];
     const searchValue = filterSearch[filterType].toLowerCase();
     if (!searchValue) return uniqueItems;
-    return uniqueItems.filter(item => 
+    return uniqueItems.filter(item =>
       item.toString().toLowerCase().includes(searchValue)
     );
   };
-  
+
   // Ensure unique items in filter rendering
   const renderFilterItems = (items, filterType) => {
     // Create a Set to track seen items
     const seen = new Set();
-    
+
     return getFilteredItems(items, filterType).map((item, index) => {
       // Skip duplicates
       if (seen.has(item)) return null;
       seen.add(item);
-      
+
       return (
         <div key={`${filterType}-${item}-${index}`} className="flex items-center">
           <input
@@ -185,7 +205,7 @@ export default function Search() {
       );
     }).filter(Boolean); // Remove null items (duplicates)
   };
-  
+
   // Sort resumes alphabetically by name
   const sortedResumes = [...filteredResumes].sort((a, b) => {
     const nameA = a.name || '';
@@ -196,10 +216,10 @@ export default function Search() {
   // Handle delete callback from ResumeCard
   const handleResumeDelete = (deletedId) => {
     // Update the displayed resumes by filtering out the deleted one
-    setFilteredResumes(prevResumes => 
+    setFilteredResumes(prevResumes =>
       prevResumes.filter(resume => resume.id !== deletedId)
     );
-    
+
     // Show success message
     alert('Resume deleted successfully');
   };
@@ -224,7 +244,7 @@ export default function Search() {
                 <span className="text-xs text-[#86868b] px-2 py-1 rounded-full bg-[#f5f5f7] border border-[#d2d2d7]">
                   Admin Mode
                 </span>
-                <button 
+                <button
                   onClick={() => {
                     if (window.confirm('Are you sure you want to delete ALL resumes? This action cannot be undone.')) {
                       setLoading(true);
@@ -249,7 +269,7 @@ export default function Search() {
               </div>
             )}
           </div>
-          
+
           <div className="mb-8 text-center">
             <h1 className="text-3xl md:text-4xl font-semibold text-[#1d1d1f] mb-4">
               Resume Search
@@ -257,7 +277,34 @@ export default function Search() {
             <p className="text-[#6e6e73] max-w-2xl mx-auto mb-6">
               Find members by skills, experience, or academic background
             </p>
-            
+
+            {/* Search mode toggle */}
+            <div className="flex justify-center mb-6">
+              <div className="inline-flex p-1 bg-white rounded-full shadow-sm border border-[#d2d2d7]">
+                <button
+                  onClick={() => setSearchMode("keyword")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${searchMode === "keyword"
+                    ? "bg-[#0071e3] text-white shadow-sm"
+                    : "text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    }`}
+                >
+                  Keyword Search
+                </button>
+                <button
+                  onClick={() => setSearchMode("semantic")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center ${searchMode === "semantic"
+                    ? "bg-[#0071e3] text-white shadow-sm"
+                    : "text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    }`}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                  AI Semantic Search
+                </button>
+              </div>
+            </div>
+
             {/* Add general search box */}
             <div className="max-w-xl mx-auto">
               <div className="relative">
@@ -265,7 +312,7 @@ export default function Search() {
                   type="text"
                   value={generalSearch}
                   onChange={handleGeneralSearchChange}
-                  placeholder="Search by name, major, skills, company experience..."
+                  placeholder={searchMode === "semantic" ? "Describe the ideal candidate (e.g. 'CS major with AWS experience')..." : "Search by name, major, skills, company experience..."}
                   className="w-full px-4 py-3 pl-10 text-[#1d1d1f] border border-[#d2d2d7] rounded-full focus:ring-2 focus:ring-[#0071e3] focus:border-[#0071e3] placeholder-[#86868b]"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -276,13 +323,20 @@ export default function Search() {
               </div>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
             {/* Filters Panel */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="font-medium text-lg text-[#1d1d1f] mb-6">Filters</h2>
-                
+              <div className={`bg-white rounded-2xl shadow-sm p-6 ${searchMode === 'semantic' ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-medium text-lg text-[#1d1d1f]">Filters</h2>
+                  {searchMode === 'semantic' && (
+                    <span className="text-[10px] bg-[#f5f5f7] text-[#86868b] px-2 py-1 rounded-full border border-[#d2d2d7]">
+                      Inactive in AI Mode
+                    </span>
+                  )}
+                </div>
+
                 {/* Name Search - Add this section */}
                 <div className="mb-6">
                   <h3 className="font-medium text-sm text-[#6e6e73] uppercase tracking-wider mb-3">Name Search</h3>
@@ -296,7 +350,7 @@ export default function Search() {
                     />
                   </div>
                 </div>
-                
+
                 {/* Filter Sections */}
                 <div className="space-y-8">
                   {/* Major Filter */}
@@ -315,7 +369,7 @@ export default function Search() {
                       {renderFilterItems(availableFilters.majors, 'major')}
                     </div>
                   </div>
-                  
+
                   {/* Company Filter */}
                   <div>
                     <h3 className="font-medium text-sm text-[#6e6e73] uppercase tracking-wider mb-3">Company</h3>
@@ -332,7 +386,7 @@ export default function Search() {
                       {renderFilterItems(availableFilters.companies, 'company')}
                     </div>
                   </div>
-                  
+
                   {/* Graduation Year Filter */}
                   <div>
                     <h3 className="font-medium text-sm text-[#6e6e73] uppercase tracking-wider mb-3">Graduation Year</h3>
@@ -349,7 +403,7 @@ export default function Search() {
                       {renderFilterItems(availableFilters.graduationYears, 'graduationYear')}
                     </div>
                   </div>
-                  
+
                   {/* Keyword Filter */}
                   <div>
                     <h3 className="font-medium text-sm text-[#6e6e73] uppercase tracking-wider mb-3">Skills</h3>
@@ -369,7 +423,7 @@ export default function Search() {
                 </div>
               </div>
             </div>
-            
+
             {/* Resume Cards */}
             <div className="lg:col-span-4">
               {loading ? (
@@ -391,9 +445,9 @@ export default function Search() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {sortedResumes.map((resume) => (
-                    <ResumeCard 
-                      key={resume.id} 
-                      resume={resume} 
+                    <ResumeCard
+                      key={resume.id}
+                      resume={resume}
                       isAdmin={user?.role === 'admin'}
                       onDelete={handleResumeDelete}
                     />

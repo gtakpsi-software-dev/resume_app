@@ -64,8 +64,47 @@ const resumeSchema = new mongoose.Schema(
       default: null,
     },
   },
-  {
-    timestamps: true,
+  major: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  graduationYear: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  /** GridFS file ID - references the PDF in MongoDB (resumes.files / resumes.chunks) */
+  fileId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'resumes.files'
+  },
+  uploadedBy: {
+    type: String,
+    required: true,
+    default: 'admin'
+  },
+  companies: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company'
+  }],
+  keywords: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Keyword'
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  /** Full text extracted from the PDF for search and embedding */
+  rawText: {
+    type: String
+  },
+  /** Vector embedding for semantic search (Voyage AI) */
+  embedding: {
+    type: [Number],
+    index: false // We'll use Atlas Vector Search index instead of standard MongoDB index
   }
 );
 
