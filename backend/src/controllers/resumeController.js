@@ -1,7 +1,13 @@
 const { Resume, Company, Keyword, User } = require('../models');
-const { uploadFile: uploadToGridFS, deleteFile: deleteFromGridFS, streamFileToResponse } = require('../utils/gridfs');
+const {
+  uploadFile: uploadToGridFS,
+  deleteFile: deleteFromGridFS,
+  streamFileToResponse,
+  readFileToBuffer,
+} = require('../utils/gridfs');
 const { parseResume } = require('../utils/resumeParser');
 const mongoose = require('mongoose');
+const pdfParse = require('pdf-parse');
 
 /**
  * Format text in title case (first letter of each word capitalized, rest lowercase)
@@ -66,6 +72,30 @@ const findOrCreateKeywords = async (keywordNames) => {
     keywords.push(keyword);
   }
   return keywords;
+};
+
+const extractContactInfo = (text) => {
+  if (!text || typeof text !== 'string') {
+    return { email: '', phone: '', linkedin: '' };
+  }
+
+  const normalizedText = text.replace(/\s+/g, ' ');
+
+  const emailMatch = normalizedText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const email = emailMatch ? emailMatch[0].trim() : '';
+
+  const phoneMatch = normalizedText.match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+  const phone = phoneMatch ? phoneMatch[0].trim() : '';
+
+  const linkedinMatch = normalizedText.match(
+    /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9-_%]+\/?/i
+  );
+  let linkedin = linkedinMatch ? linkedinMatch[0].trim() : '';
+  if (linkedin && !/^https?:\/\//i.test(linkedin)) {
+    linkedin = `https://${linkedin}`;
+  }
+
+  return { email, phone, linkedin };
 };
 
 // Upload a new resume
@@ -137,6 +167,9 @@ const uploadResume = async (req, res) => {
         name: filenameWithoutExt, // Use filename as fallback name
         major: 'Unspecified',
         graduationYear: 'Unspecified',
+        email: '',
+        phone: '',
+        linkedin: '',
         companies: [],
         keywords: []
       };
@@ -178,6 +211,9 @@ const uploadResume = async (req, res) => {
     // Get data from parsed resume or form inputs (fallback)
     let major = req.body.major || parsedData.major || '';
     let graduationYear = req.body.graduationYear || parsedData.graduationYear || '';
+    const email = req.body.email || parsedData.email || '';
+    const phone = req.body.phone || parsedData.phone || '';
+    const linkedin = req.body.linkedin || parsedData.linkedin || '';
 
     // Validate major - don't allow empty values
     if (!major || major.trim() === '') {
@@ -287,6 +323,9 @@ const uploadResume = async (req, res) => {
         name,
         major,
         graduationYear,
+        email,
+        phone,
+        linkedin,
         fileId: gridfsFileId,
         uploadedBy: req.user.id || 'admin',
         companies: companyIds,
@@ -316,6 +355,9 @@ const uploadResume = async (req, res) => {
         name: resume.name,
         major: resume.major,
         graduationYear: resume.graduationYear,
+        email: resume.email || '',
+        phone: resume.phone || '',
+        linkedin: resume.linkedin || '',
         parsingWarning: parsingErrorMessage,
         companies: uniqueCompanyList,
         keywords: uniqueKeywordList
@@ -493,6 +535,9 @@ const searchResumes = async (req, res) => {
         name: resume.name,
         major: resume.major,
         graduationYear: resume.graduationYear,
+        email: resume.email || '',
+        phone: resume.phone || '',
+        linkedin: resume.linkedin || '',
         pdfUrl: fileUrl,
         signedPdfUrl: fileUrl,
         companies: associatedCompanies,
@@ -557,6 +602,9 @@ const getResumeById = async (req, res) => {
       name: resume.name,
       major: resume.major,
       graduationYear: resume.graduationYear,
+      email: resume.email || '',
+      phone: resume.phone || '',
+      linkedin: resume.linkedin || '',
       pdfUrl,
       companies: resume.companies ? resume.companies.map(c => c.name) : [],
       keywords: resume.keywords ? resume.keywords.map(k => k.name) : [],
@@ -582,7 +630,7 @@ const updateResume = async (req, res) => {
   
   try {
     const { id } = req.params;
-    const { name, major, graduationYear, companies, keywords } = req.body;
+    const { name, major, graduationYear, email, phone, linkedin, companies, keywords } = req.body;
     
     if (!mongoose.Types.ObjectId.isValid(id)) {
       await session.abortTransaction();
@@ -610,6 +658,9 @@ const updateResume = async (req, res) => {
     if (name) resume.name = name;
     if (major) resume.major = major;
     if (graduationYear) resume.graduationYear = graduationYear;
+    if (email !== undefined) resume.email = email || '';
+    if (phone !== undefined) resume.phone = phone || '';
+    if (linkedin !== undefined) resume.linkedin = linkedin || '';
     
     // Update companies if provided
     if (companies) {
@@ -643,6 +694,9 @@ const updateResume = async (req, res) => {
       name: updatedResume.name,
       major: updatedResume.major,
       graduationYear: updatedResume.graduationYear,
+      email: updatedResume.email || '',
+      phone: updatedResume.phone || '',
+      linkedin: updatedResume.linkedin || '',
       pdfUrl,
       companies: updatedResume.companies ? updatedResume.companies.map(c => c.name) : [],
       keywords: updatedResume.keywords ? updatedResume.keywords.map(k => k.name) : []
@@ -819,6 +873,71 @@ const getFilters = async (req, res) => {
   }
 };
 
+const backfillResumeContacts = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Permission denied. Admin access required.' });
+    }
+
+    const resumes = await Resume.find({ isActive: true })
+      .select('name fileId email phone linkedin')
+      .lean();
+
+    let scanned = 0;
+    let updated = 0;
+    let skipped = 0;
+    const failures = [];
+
+    for (const resume of resumes) {
+      scanned += 1;
+      const hasAllContactInfo = resume.email && resume.phone && resume.linkedin;
+      if (hasAllContactInfo || !resume.fileId) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        const pdfBuffer = await readFileToBuffer(resume.fileId);
+        const parsed = await pdfParse(pdfBuffer);
+        const contact = extractContactInfo(parsed.text || '');
+
+        const updates = {};
+        if (!resume.email && contact.email) updates.email = contact.email;
+        if (!resume.phone && contact.phone) updates.phone = contact.phone;
+        if (!resume.linkedin && contact.linkedin) updates.linkedin = contact.linkedin;
+
+        if (Object.keys(updates).length > 0) {
+          await Resume.updateOne({ _id: resume._id }, { $set: updates });
+          updated += 1;
+        } else {
+          skipped += 1;
+        }
+      } catch (error) {
+        failures.push({
+          id: resume._id,
+          name: resume.name || 'Unknown',
+          message: error.message,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      error: false,
+      message: 'Contact backfill completed.',
+      data: {
+        scanned,
+        updated,
+        skipped,
+        failed: failures.length,
+        failures: failures.slice(0, 25),
+      },
+    });
+  } catch (error) {
+    console.error('Backfill resume contacts error:', error);
+    return res.status(500).json({ error: true, message: 'Error backfilling resume contacts.' });
+  }
+};
+
 module.exports = {
   uploadResume,
   searchResumes,
@@ -827,5 +946,6 @@ module.exports = {
   updateResume,
   deleteResume,
   deleteAllResumes,
-  getFilters
+  getFilters,
+  backfillResumeContacts,
 };

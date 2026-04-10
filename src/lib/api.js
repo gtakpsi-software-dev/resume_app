@@ -115,6 +115,8 @@ export const resumeAPI = {
     api.delete(`/resumes/${id}`),
   deleteAll: () =>
     api.delete('/resumes/all/delete'),
+  backfillContacts: () =>
+    api.post('/resumes/backfill/contacts'),
 };
 
 // Companies-related API calls

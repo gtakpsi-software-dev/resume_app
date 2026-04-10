@@ -6,6 +6,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/scripts/seed.js",
+    "backfill:contacts": "node src/scripts/backfillResumeContacts.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

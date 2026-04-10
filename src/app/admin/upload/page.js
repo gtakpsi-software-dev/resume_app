@@ -14,6 +14,7 @@ export default function UploadPage() {
   const [files, setFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isBackfillingContacts, setIsBackfillingContacts] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [parsingStatus, setParsingStatus] = useState("");
@@ -226,6 +227,28 @@ export default function UploadPage() {
       setIsDeleting(false);
     }
   };
+
+  const handleBackfillContacts = async () => {
+    setIsBackfillingContacts(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const { data } = await resumeAPI.backfillContacts();
+      const stats = data?.data || {};
+      setSuccess(
+        `Contact refresh finished. Scanned ${stats.scanned || 0}, updated ${stats.updated || 0}, skipped ${stats.skipped || 0}, failed ${stats.failed || 0}.`
+      );
+    } catch (err) {
+      console.error("Error refreshing resume contacts:", err);
+      setError(
+        err?.response?.data?.message ||
+          "Failed to refresh contact info. Please try again."
+      );
+    } finally {
+      setIsBackfillingContacts(false);
+    }
+  };
   
   if (isLoading) {
     return (
@@ -242,13 +265,22 @@ export default function UploadPage() {
           <Link href="/" className="text-indigo-600 hover:text-indigo-900">
             &larr; Back to Home
           </Link>
-          
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
-            Delete All Resumes
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBackfillContacts}
+              disabled={isBackfillingContacts}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              {isBackfillingContacts ? "Refreshing..." : "Refresh Contact Info"}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              Delete All Resumes
+            </button>
+          </div>
         </div>
         
         <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl mb-8">

@@ -227,6 +227,31 @@ const formatTitleCase = (text) => {
     .join(' ');
 };
 
+const extractContactInfo = (text) => {
+  if (!text || typeof text !== 'string') {
+    return { email: '', phone: '', linkedin: '' };
+  }
+
+  const normalizedText = text.replace(/\s+/g, ' ');
+
+  const emailMatch = normalizedText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const email = emailMatch ? emailMatch[0].trim() : '';
+
+  // Supports common US-style phone formats with optional country code.
+  const phoneMatch = normalizedText.match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+  const phone = phoneMatch ? phoneMatch[0].trim() : '';
+
+  const linkedinMatch = normalizedText.match(
+    /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9-_%]+\/?/i
+  );
+  let linkedin = linkedinMatch ? linkedinMatch[0].trim() : '';
+  if (linkedin && !/^https?:\/\//i.test(linkedin)) {
+    linkedin = `https://${linkedin}`;
+  }
+
+  return { email, phone, linkedin };
+};
+
 /**
  * Use Gemini AI to extract resume information
  * @param {string} text - Resume text
@@ -332,6 +357,9 @@ const parseResumeWithGemini = async (text) => {
         name: '',
         major: 'Unspecified',
         graduationYear: 'Unspecified',
+        email: '',
+        phone: '',
+        linkedin: '',
         companies: [],
         keywords: []
       };
@@ -402,6 +430,9 @@ const parseResumeWithGemini = async (text) => {
         name: formattedName,
         major: cleanedMajor,
         graduationYear,
+        email: '',
+        phone: '',
+        linkedin: '',
         companies,
         keywords
       };
@@ -457,6 +488,9 @@ const parseResumeWithGemini = async (text) => {
         name: extractedName,
         major: extractedMajor,
         graduationYear: extractedYear,
+        email: '',
+        phone: '',
+        linkedin: '',
         companies,
         keywords
       };
@@ -469,6 +503,9 @@ const parseResumeWithGemini = async (text) => {
       name: '',
       major: 'Unspecified',
       graduationYear: 'Unspecified',
+      email: '',
+      phone: '',
+      linkedin: '',
       companies: [],
       keywords: []
     };
@@ -490,6 +527,9 @@ const parseResume = async (fileBuffer, name) => {
         name: name || 'Unknown',
         major: 'Unspecified',
         graduationYear: 'Unspecified',
+        email: '',
+        phone: '',
+        linkedin: '',
         companies: [],
         keywords: []
       };
@@ -505,6 +545,9 @@ const parseResume = async (fileBuffer, name) => {
         name: name || 'Unknown',
         major: 'Unspecified',
         graduationYear: 'Unspecified',
+        email: '',
+        phone: '',
+        linkedin: '',
         companies: [],
         keywords: []
       };
@@ -512,11 +555,19 @@ const parseResume = async (fileBuffer, name) => {
     
     // Parse with Gemini AI
     const result = await parseResumeWithGemini(text);
+    const contactInfo = extractContactInfo(text);
     
+    const mergedResult = {
+      ...result,
+      email: contactInfo.email || '',
+      phone: contactInfo.phone || '',
+      linkedin: contactInfo.linkedin || '',
+    };
+
     // Log the final result for debugging
-    console.log('Final resume parsing result:', result);
-    
-    return result;
+    console.log('Final resume parsing result:', mergedResult);
+
+    return mergedResult;
   } catch (error) {
     console.error('Error parsing resume:', error);
     // Return default values rather than throwing error
@@ -524,10 +575,13 @@ const parseResume = async (fileBuffer, name) => {
       name: name || 'Unknown',
       major: 'Unspecified',
       graduationYear: 'Unspecified',
+      email: '',
+      phone: '',
+      linkedin: '',
       companies: [],
       keywords: []
     };
   }
 };
 
-module.exports = { parseResume }; 
+module.exports = { parseResume };
