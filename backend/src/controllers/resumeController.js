@@ -7,29 +7,9 @@ const {
 } = require('../utils/gridfs');
 const { parseResume } = require('../utils/resumeParser');
 const { generateEmbeddings } = require('../utils/voyageService');
+const { clean, parseYear, classStatus, keywordMatch, fuse, cosineSimilarity, countBy, byCountThenName } = require('../utils/resumeSearch');
 const mongoose = require('mongoose');
 const pdfParse = require('pdf-parse');
-
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const toRegex = (value) => new RegExp(escapeRegex(value), 'i');
-
-const cosineSimilarity = (a = [], b = []) => {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || b.length === 0 || a.length !== b.length) {
-    return -1;
-  }
-
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  if (normA === 0 || normB === 0) return -1;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-};
 
 const caseInsensitive = { locale: 'en', strength: 2 };
 
@@ -399,131 +379,143 @@ const uploadResume = async (req, res) => {
   }
 };
 
-// Search resumes with filtering
+const VECTOR_HITS = 30;
+const VECTOR_SCORE_GAP = 0.05;
+
+const closeToBest = (hits) => {
+  const best = hits[0]?.score ?? 0;
+  return hits.filter((h) => h.score >= best - VECTOR_SCORE_GAP).slice(0, VECTOR_HITS).map((h) => h.id);
+};
+
+const vectorRanking = async (q) => {
+  let embedding;
+  try {
+    [embedding] = (await generateEmbeddings(q)) || [];
+  } catch {
+    return null;
+  }
+  if (!embedding) return null;
+
+  try {
+    const hits = await Resume.aggregate([
+      { $vectorSearch: { index: 'vector_index', path: 'embedding', queryVector: embedding, numCandidates: 200, limit: 100 } },
+      { $match: { isActive: true } },
+      { $project: { _id: 1, score: { $meta: 'vectorSearchScore' } } },
+    ]);
+    return closeToBest(hits.map((h) => ({ id: String(h._id), score: h.score })));
+  } catch (error) {
+    const message = error.message || '';
+    const atlasUnavailable = ['$vectorSearch', 'vector_index', 'not enabled', 'Unrecognized pipeline stage'].some((m) =>
+      message.includes(m)
+    );
+    if (!atlasUnavailable) return null;
+  }
+
+  const embedded = await Resume.find({ isActive: true, embedding: { $exists: true, $ne: [] } }).select('embedding').lean();
+  return closeToBest(
+    embedded
+      .map((r) => ({ id: String(r._id), score: (1 + cosineSimilarity(embedding, r.embedding)) / 2 }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+  );
+};
+
+const listParam = (value) => new Set(String(value || '').split(',').map((v) => v.trim()).filter(Boolean));
+
 const searchResumes = async (req, res) => {
   try {
-    const { query, name, major, company, graduationYear, keyword } = req.query;
+    const q = String(req.query.q || '').trim();
+    const filters = {
+      major: listParam(req.query.major),
+      company: listParam(req.query.company),
+      graduationYear: listParam(req.query.graduationYear),
+      status: ['student', 'alumni'].includes(req.query.status) ? req.query.status : null,
+    };
+    const sort = ['relevance', 'name', 'class'].includes(req.query.sort) ? req.query.sort : q ? 'relevance' : 'name';
 
-    // Build MongoDB query
-    const resumeQuery = { isActive: true };
-
-    if (query) {
-      const searchRegex = toRegex(query);
-      const [matchingCompanies, matchingKeywords] = await Promise.all([
-        Company.find({ name: searchRegex }).select('_id'),
-        Keyword.find({ name: searchRegex }).select('_id'),
-      ]);
-      resumeQuery.$or = [
-        { name: searchRegex },
-        { major: searchRegex },
-        { graduationYear: searchRegex },
-        { companies: { $in: matchingCompanies.map(c => c._id) } },
-        { keywords: { $in: matchingKeywords.map(k => k._id) } },
-      ];
-    }
-
-    // Specific filters
-    if (name) {
-      resumeQuery.name = toRegex(name);
-    }
-
-    if (major) {
-      const majorList = major.split(',').map(m => m.trim()).filter(Boolean);
-      if (majorList.length === 1) {
-        resumeQuery.major = toRegex(majorList[0]);
-      } else {
-        resumeQuery.major = { $in: majorList.map(toRegex) };
-      }
-    }
-
-    if (graduationYear) {
-      const yearList = graduationYear.split(',').map(y => y.trim()).filter(Boolean);
-      if (yearList.length === 1) {
-        resumeQuery.graduationYear = yearList[0];
-      } else {
-        resumeQuery.graduationYear = { $in: yearList };
-      }
-    }
-
-    // Company filter - need to find companies first, then filter resumes
-    let companyFilter = null;
-    if (company) {
-      const companyList = company.split(',').map(c => c.trim()).filter(Boolean);
-      const companies = await Company.find({
-        name: { $in: companyList.map(toRegex) }
-      });
-      if (companies.length > 0) {
-        companyFilter = companies.map(c => c._id);
-      } else {
-        // No matching companies, return empty result
-        return res.status(200).json({
-          error: false,
-          count: 0,
-          data: []
-        });
-      }
-    }
-
-    // Keyword filter - need to find keywords first, then filter resumes
-    let keywordFilter = null;
-    if (keyword) {
-      const keywordList = keyword.split(',').map(k => k.trim()).filter(Boolean);
-      const keywords = await Keyword.find({
-        name: { $in: keywordList.map(toRegex) }
-      });
-      if (keywords.length > 0) {
-        keywordFilter = keywords.map(k => k._id);
-      } else {
-        // No matching keywords, return empty result
-        return res.status(200).json({
-          error: false,
-          count: 0,
-          data: []
-        });
-      }
-    }
-
-    // Add company and keyword filters to query
-    if (companyFilter) {
-      resumeQuery.companies = { $in: companyFilter };
-    }
-
-    if (keywordFilter) {
-      resumeQuery.keywords = { $in: keywordFilter };
-    }
-
-    const resumes = await Resume.find(resumeQuery)
+    const docs = await Resume.find({ isActive: true })
       .select('-rawText -embedding')
       .populate('companies', 'name')
       .populate('keywords', 'name')
-      .sort({ createdAt: -1 });
+      .lean();
 
-    // Build file URL for each resume (GridFS stream endpoint)
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const formattedResumes = resumes.map((resume) => {
-      const associatedCompanies = resume.companies ? resume.companies.map(c => c.name) : [];
-      const associatedKeywords = resume.keywords ? resume.keywords.map(k => k.name) : [];
-      const fileUrl = resume.fileId ? `${baseUrl}/api/resumes/${resume._id}/file` : null;
+    const now = new Date();
+    const resumes = docs.map((doc) => {
+      const year = parseYear(doc.graduationYear);
       return {
-        id: resume._id,
-        name: resume.name,
-        major: resume.major,
-        graduationYear: resume.graduationYear,
-        email: resume.email || '',
-        phone: resume.phone || '',
-        linkedin: resume.linkedin || '',
-        pdfUrl: fileUrl,
-        signedPdfUrl: fileUrl,
-        companies: associatedCompanies,
-        keywords: associatedKeywords
+        id: String(doc._id),
+        name: doc.name,
+        major: clean(doc.major),
+        graduationYear: clean(doc.graduationYear),
+        year,
+        status: classStatus(year, now),
+        companies: (doc.companies || []).map((c) => clean(c.name)).filter(Boolean),
+        keywords: (doc.keywords || []).map((k) => clean(k.name)).filter(Boolean),
+        email: doc.email || '',
+        phone: doc.phone || '',
+        linkedin: doc.linkedin || '',
       };
     });
 
-    res.status(200).json({
-      error: false,
-      count: formattedResumes.length,
-      data: formattedResumes
-    });
+    let mode = 'browse';
+    let candidates = resumes;
+    const scores = new Map();
+    const reasons = new Map();
+
+    if (q) {
+      const matches = resumes.map((r) => ({ id: r.id, match: keywordMatch(r, q) })).filter((h) => h.match);
+      const complete = matches.filter((h) => h.match.complete);
+      const keywordHits = (complete.length ? complete : matches).sort((a, b) => b.match.score - a.match.score);
+      keywordHits.forEach((h) => reasons.set(h.id, h.match.reasons));
+
+      const vectorIds = await vectorRanking(q).catch(() => null);
+      mode = vectorIds ? 'hybrid' : 'keyword';
+      (vectorIds || []).forEach((id) => !reasons.has(id) && reasons.set(id, ['Similar experience']));
+
+      fuse([keywordHits.map((h) => h.id), vectorIds || []]).forEach((score, id) => scores.set(id, score));
+      candidates = resumes.filter((r) => scores.has(r.id));
+    }
+
+    const passes = (r, except) =>
+      (except === 'major' || !filters.major.size || filters.major.has(r.major)) &&
+      (except === 'company' || !filters.company.size || r.companies.some((c) => filters.company.has(c))) &&
+      (except === 'graduationYear' || !filters.graduationYear.size || filters.graduationYear.has(String(r.year))) &&
+      (except === 'status' || !filters.status || r.status === filters.status);
+
+    const facets = {
+      majors: countBy(candidates.filter((r) => passes(r, 'major')), (r) => [r.major]).sort(byCountThenName),
+      companies: countBy(candidates.filter((r) => passes(r, 'company')), (r) => r.companies).sort(byCountThenName),
+      graduationYears: countBy(candidates.filter((r) => passes(r, 'graduationYear')), (r) => [r.year ? String(r.year) : ''])
+        .sort((a, b) => b.value.localeCompare(a.value)),
+      status: candidates
+        .filter((r) => passes(r, 'status'))
+        .reduce((acc, r) => (r.status ? { ...acc, [r.status]: acc[r.status] + 1 } : acc), { student: 0, alumni: 0 }),
+    };
+
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const comparators = {
+      relevance: (a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0) || byName(a, b),
+      name: byName,
+      class: (a, b) => (b.year || 0) - (a.year || 0) || byName(a, b),
+    };
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const data = candidates
+      .filter((r) => passes(r))
+      .sort(comparators[sort])
+      .map(({ year, ...r }) => {
+        const pdfUrl = `${baseUrl}/api/resumes/${r.id}/file`;
+        const score = scores.get(r.id);
+        return {
+          ...r,
+          pdfUrl,
+          signedPdfUrl: pdfUrl,
+          score: score ? Math.round(score * 10000) / 10000 : null,
+          reasons: reasons.get(r.id) || [],
+        };
+      });
+
+    res.status(200).json({ error: false, count: data.length, mode, data, facets });
   } catch (error) {
     console.error('Resume search error:', error);
     res.status(500).json({ error: true, message: 'Error searching resumes.' });
@@ -764,184 +756,6 @@ const deleteAllResumes = async (req, res) => {
   }
 };
 
-// Semantic/Vector Search
-const vectorSearch = async (req, res) => {
-  try {
-    const { query, limit = 10 } = req.query;
-
-    if (!query) {
-      return res.status(400).json({ error: true, message: 'Search query is required.' });
-    }
-
-    console.log(`Semantic search query: "${query}"`);
-
-    // 1. Generate embedding for the query
-    let queryEmbedding;
-    try {
-      const embeddings = await generateEmbeddings(query);
-      if (!embeddings || embeddings.length === 0) {
-        throw new Error('Failed to generate query embedding');
-      }
-      queryEmbedding = embeddings[0];
-    } catch (embeddingError) {
-      console.error('Error generating query embedding:', embeddingError.message);
-      if (embeddingError.response && embeddingError.response.status === 429) {
-        return res.status(429).json({
-          error: true,
-          message: 'The AI search engine is currently busy processing other requests. Please try again in a few seconds.'
-        });
-      }
-      return res.status(500).json({ error: true, message: 'Error processing search query.' });
-    }
-
-    const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
-    let results = [];
-
-    try {
-      results = await Resume.aggregate([
-        {
-          $vectorSearch: {
-            index: 'vector_index',
-            path: 'embedding',
-            queryVector: queryEmbedding,
-            numCandidates: parsedLimit * 20,
-            limit: parsedLimit * 3
-          }
-        },
-        { $match: { isActive: true } },
-        { $limit: parsedLimit },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            major: 1,
-            graduationYear: 1,
-            fileId: 1,
-            companies: 1,
-            keywords: 1,
-            score: { $meta: 'vectorSearchScore' }
-          }
-        },
-        {
-          $lookup: {
-            from: 'companies',
-            localField: 'companies',
-            foreignField: '_id',
-            as: 'companies'
-          }
-        },
-        {
-          $lookup: {
-            from: 'keywords',
-            localField: 'keywords',
-            foreignField: '_id',
-            as: 'keywords'
-          }
-        }
-      ]);
-    } catch (atlasError) {
-      const message = atlasError.message || '';
-      const canFallback =
-        message.includes('$vectorSearch') ||
-        message.includes('vector_index') ||
-        message.includes('not enabled') ||
-        message.includes('Unrecognized pipeline stage');
-
-      if (!canFallback) {
-        throw atlasError;
-      }
-
-      console.warn('Atlas vector search unavailable, using application-side cosine fallback.');
-      const embeddedResumes = await Resume.find({
-        isActive: true,
-        embedding: { $exists: true, $ne: [] }
-      })
-        .select('name major graduationYear fileId companies keywords embedding')
-        .populate('companies', 'name')
-        .populate('keywords', 'name')
-        .lean();
-
-      results = embeddedResumes
-        .map((resume) => ({
-          ...resume,
-          score: cosineSimilarity(queryEmbedding, resume.embedding)
-        }))
-        .filter((resume) => resume.score >= 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, parsedLimit);
-    }
-
-    // 3. Format results
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const formattedResults = results.map(resume => {
-      const fileUrl = resume.fileId ? `${baseUrl}/api/resumes/${resume._id}/file` : null;
-      return {
-        id: resume._id,
-        name: resume.name,
-        major: resume.major,
-        graduationYear: resume.graduationYear,
-        pdfUrl: fileUrl,
-        signedPdfUrl: fileUrl,
-        companies: resume.companies.map(c => c.name),
-        keywords: resume.keywords.map(k => k.name),
-        score: resume.score
-      };
-    });
-
-    res.status(200).json({
-      error: false,
-      count: formattedResults.length,
-      data: formattedResults
-    });
-  } catch (error) {
-    console.error('Vector search error:', error);
-    res.status(500).json({ error: true, message: 'Error performing semantic search.' });
-  }
-};
-
-// Get available filters (majors, companies, graduation years)
-const getFilters = async (req, res) => {
-  try {
-    // Get unique majors
-    const majors = await Resume.distinct('major', {
-      isActive: true,
-      major: { $ne: '', $exists: true }
-    });
-
-    // Get unique graduation years
-    const graduationYears = await Resume.distinct('graduationYear', {
-      isActive: true,
-      graduationYear: { $ne: '', $exists: true }
-    });
-
-    // Get companies that are associated with active resumes
-    const companiesWithResumes = await Company.find({
-      _id: { $in: await Resume.distinct('companies', { isActive: true }) }
-    }).select('name');
-
-    // Get keywords that are associated with active resumes
-    const keywordsWithResumes = await Keyword.find({
-      _id: { $in: await Resume.distinct('keywords', { isActive: true }) }
-    }).select('name');
-
-    // Format the response and filter out empty values
-    const filters = {
-      majors: majors.filter(Boolean).sort(),
-      graduationYears: graduationYears.filter(Boolean).sort(),
-      companies: companiesWithResumes.map(c => c.name).filter(Boolean).sort(),
-      keywords: keywordsWithResumes.map(k => k.name).filter(Boolean).sort()
-    };
-
-    res.status(200).json({
-      error: false,
-      data: filters
-    });
-  } catch (error) {
-    console.error('Get filters error:', error);
-    res.status(500).json({ error: true, message: 'Error retrieving filters.' });
-  }
-};
-
 const backfillResumeContacts = async (req, res) => {
   try {
     if (!req.user || req.user.role !== 'admin') {
@@ -1015,7 +829,5 @@ module.exports = {
   updateResume,
   deleteResume,
   deleteAllResumes,
-  getFilters,
-  vectorSearch,
   backfillResumeContacts,
 };

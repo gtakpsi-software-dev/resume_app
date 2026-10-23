@@ -7,8 +7,6 @@ const {
   updateResume,
   deleteResume,
   deleteAllResumes,
-  getFilters,
-  vectorSearch,
   backfillResumeContacts,
 } = require('../controllers/resumeController');
 const { authenticate, isAdmin } = require('../middleware/auth');
@@ -17,8 +15,6 @@ const upload = require('../middleware/upload');
 const router = express.Router();
 
 router.get('/search', authenticate, searchResumes);
-router.get('/vector-search', authenticate, vectorSearch);
-router.get('/filters', authenticate, getFilters);
 router.get('/:id/file', authenticate, getResumeFile);
 router.get('/:id', authenticate, getResumeById);
 
