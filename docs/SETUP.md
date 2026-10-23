@@ -71,6 +71,9 @@ UPLOAD_LIMIT=10
 
 # Optional: needed for AI semantic search (resume embeddings). Requires an Atlas Vector Search index named vector_index on resumes.embedding.
 # VOYAGE_API_KEY=your_voyage_api_key_here
+
+# Optional: set to "members" to show alumni email and phone to all signed-in members. Defaults to admins only.
+# ALUMNI_CONTACT_ACCESS=admins
 ```
 
 **Important:**
@@ -136,14 +139,28 @@ Open **http://localhost:3000**.
 
 ---
 
-## 6. Logins (don’t commit these; share via secure channel)
+## 6. Alumni data
+
+The alumni directory is loaded from the chapter's spreadsheet export. Ask a lead for the CSV and never commit it.
+
+```bash
+cd backend
+npm run alumni:import -- /path/to/alumni.csv --dry-run
+npm run alumni:import -- /path/to/alumni.csv
+```
+
+See [alumni-data-mapping.md](./alumni-data-mapping.md) for how each column is cleaned and who can see it.
+
+---
+
+## 7. Logins (don’t commit these; share via secure channel)
 
 - **Admin:** Use the admin login page with the `ADMIN_PASSWORD` from `backend/.env`. Admin login is disabled if it is unset.
 - **Member sign-up:** New members need the `MEMBER_ACCESS_CODE` from `backend/.env`. Registration is disabled if it is unset.
 
 ---
 
-## 7. Quick checklist
+## 8. Quick checklist
 
 - [ ] Repo cloned, `npm install` run in root and in `backend`
 - [ ] **backend/.env** created with `MONGODB_URI`, `JWT_SECRET`, `ADMIN_PASSWORD`, `MEMBER_ACCESS_CODE`, and optional `GEMINI_API_KEY`
