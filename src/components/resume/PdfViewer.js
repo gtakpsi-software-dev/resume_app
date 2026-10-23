@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import { buttonClass } from "@/components/ui/Button";
+import Spinner from "@/components/ui/Spinner";
 
 export default function PdfViewer({ pdfUrl, fileName = "resume.pdf" }) {
   const [blobUrl, setBlobUrl] = useState(null);
@@ -30,32 +32,22 @@ export default function PdfViewer({ pdfUrl, fileName = "resume.pdf" }) {
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="text-[#ff3b30] text-center">
-          <p className="text-xl font-semibold">Failed to load PDF</p>
-          <p className="mt-2">Please try again later or contact support</p>
-        </div>
+      <div className="px-6 py-20 text-center">
+        <p className="font-display uppercase tracking-[0.08em] text-danger">Could not load this resume</p>
+        <p className="mt-2 text-sm text-muted">Close this window and try again.</p>
       </div>
     );
   }
 
   if (!blobUrl) {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#0071e3]"></div>
-      </div>
-    );
+    return <Spinner className="py-32" />;
   }
 
   return (
-    <div className="pdf-viewer-container w-full h-full">
-      <iframe src={blobUrl} className="w-full h-[70vh] border-0" title="Resume PDF Viewer" />
-      <div className="mt-4 pb-4 text-center">
-        <a
-          href={blobUrl}
-          download={fileName}
-          className="text-[#0071e3] hover:text-[#0077ed] font-medium px-4 py-2 rounded-full border border-[#d2d2d7] transition-colors"
-        >
+    <div>
+      <iframe src={blobUrl} className="h-[70vh] w-full border-0 bg-mist" title="Resume PDF" />
+      <div className="flex justify-end border-t border-line px-6 py-4">
+        <a href={blobUrl} download={fileName} className={buttonClass({ variant: "outline", size: "sm" })}>
           Download PDF
         </a>
       </div>

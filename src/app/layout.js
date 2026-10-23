@@ -1,16 +1,18 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Tenor_Sans, League_Spartan } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/ui/Header";
+import Footer from "@/components/ui/Footer";
 import { AuthProvider } from "@/lib/AuthContext";
 import { MemberAuthProvider } from "@/lib/MemberAuthContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const tenor = Tenor_Sans({
+  variable: "--font-tenor",
+  weight: "400",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const spartan = League_Spartan({
+  variable: "--font-spartan",
   subsets: ["latin"],
 });
 
@@ -22,13 +24,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${tenor.variable} ${spartan.variable} antialiased min-h-screen flex flex-col`}>
         <AuthProvider>
           <MemberAuthProvider>
             <Header />
-            <main>{children}</main>
+            <main className="flex-1 flex flex-col">{children}</main>
+            <Footer />
           </MemberAuthProvider>
         </AuthProvider>
       </body>

@@ -1,202 +1,137 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { resumeAPI } from "@/lib/api";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import PageHeader from "@/components/ui/PageHeader";
+import Spinner from "@/components/ui/Spinner";
+import EmptyState from "@/components/ui/EmptyState";
+import Notice from "@/components/ui/Notice";
+import Modal from "@/components/ui/Modal";
 
-const ALUMNI_CUTOFF_YEAR = 2027;
-
-const extractYear = (value) => {
-  if (!value) return null;
-  const match = String(value).match(/\b(19\d{2}|20\d{2})\b/g);
-  if (!match?.length) return null;
-  const numericYears = match.map(Number).filter((year) => !Number.isNaN(year));
-  if (!numericYears.length) return null;
-  return Math.max(...numericYears);
+const alumniCutoffYear = () => {
+  const now = new Date();
+  return now.getMonth() > 4 ? now.getFullYear() : now.getFullYear() - 1;
 };
 
+const extractYear = (value) => {
+  const years = String(value || "").match(/\b(19|20)\d{2}\b/g);
+  return years ? Math.max(...years.map(Number)) : null;
+};
+
+const initials = (name) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
+
+function ContactRow({ label, href, value, external }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.2em] text-muted">{label}</p>
+      <a
+        href={href}
+        className="mt-1 block break-all text-ink underline-offset-4 hover:underline"
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {value}
+      </a>
+    </div>
+  );
+}
+
 function AlumniPage() {
-  const [selectedAlum, setSelectedAlum] = useState(null);
   const [alumni, setAlumni] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const cutoff = alumniCutoffYear();
 
   useEffect(() => {
-    const fetchAlumni = async () => {
-      try {
-        setIsLoading(true);
-        setError("");
-        const response = await resumeAPI.getAll();
-        const resumes = response?.data?.data || [];
-
-        const alumniRecords = resumes
+    resumeAPI
+      .getAll()
+      .then(({ data }) => {
+        const records = (data?.data || [])
           .map((resume) => {
-            const gradYear = extractYear(resume.graduationYear);
-            if (!gradYear || gradYear > ALUMNI_CUTOFF_YEAR) return null;
-
-            const companies = Array.isArray(resume.companies) ? resume.companies : [];
+            const year = extractYear(resume.graduationYear);
+            if (!year || year > cutoff) return null;
             return {
               id: resume.id,
               name: resume.name || "Unknown",
-              gradYear: String(gradYear),
-              currentRole: companies[0] || "",
+              gradYear: year,
+              company: resume.companies?.[0] || "",
               email: resume.email || "",
               phone: resume.phone || "",
               linkedin: resume.linkedin || "",
             };
           })
           .filter(Boolean)
-          .sort((a, b) => Number(b.gradYear) - Number(a.gradYear) || a.name.localeCompare(b.name));
+          .sort((a, b) => b.gradYear - a.gradYear || a.name.localeCompare(b.name));
+        setAlumni(records);
+      })
+      .catch(() => setError("Unable to load alumni right now."))
+      .finally(() => setIsLoading(false));
+  }, [cutoff]);
 
-        setAlumni(alumniRecords);
-      } catch (fetchError) {
-        console.error("Failed to fetch alumni from resumes:", fetchError);
-        setError("Unable to load alumni data right now.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAlumni();
-  }, []);
-
-  const hasContactDetails = useMemo(() => {
-    if (!selectedAlum) return false;
-    return Boolean(selectedAlum.email || selectedAlum.phone || selectedAlum.linkedin);
-  }, [selectedAlum]);
+  const close = useCallback(() => setSelected(null), []);
+  const hasContact = selected && (selected.email || selected.phone || selected.linkedin);
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] flex flex-col">
-      <main className="flex-1 py-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl sm:text-4xl font-semibold text-[#1d1d1f] mb-2">
-              Alumni Network
-            </h1>
-            <p className="text-sm sm:text-base text-[#6e6e73] max-w-2xl mx-auto">
-              Connect with Alpha Kappa Psi alumni and learn where our brothers
-              have gone after graduating from Georgia Tech.
-            </p>
-          </div>
+    <>
+      <PageHeader
+        eyebrow="Epsilon Sigma"
+        title="Alumni"
+        description="Where our brothers went after Georgia Tech. Reach out to alumni in the fields you are aiming for."
+      />
 
-          {isLoading ? (
-            <p className="text-center text-sm text-[#6e6e73]">Loading alumni...</p>
-          ) : error ? (
-            <p className="text-center text-sm text-[#d93025]">{error}</p>
-          ) : alumni.length === 0 ? (
-            <p className="text-center text-sm text-[#6e6e73]">
-              No alumni found from resumes with graduation year {ALUMNI_CUTOFF_YEAR} or earlier.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {alumni.map((alum) => (
-                <div
-                  key={alum.id || alum.name}
-                  className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] p-5 flex flex-col justify-between"
-                >
-                  <div>
-                    <h2 className="text-lg font-semibold text-[#1d1d1f] mb-1">
-                      {alum.name}
-                    </h2>
-                    <p className="text-sm text-[#6e6e73] mb-2">
-                      Graduation: <span className="font-medium">{alum.gradYear}</span>
-                    </p>
-                    <p className="text-sm text-[#6e6e73] mb-4">
-                      Current Role:{" "}
-                      <span className="font-medium">
-                        {alum.currentRole || "Not found"}
-                      </span>
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAlum(alum)}
-                    className="mt-3 inline-flex items-center justify-center rounded-full border border-[#d2d2d7] px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] transition-colors"
-                  >
-                    Contact alum
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
-
-      {selectedAlum && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-semibold text-[#1d1d1f]">
-                  Contact {selectedAlum.name}
-                </h2>
-                <p className="text-sm text-[#6e6e73]">
-                  {selectedAlum.gradYear}
-                  {selectedAlum.currentRole ? ` · ${selectedAlum.currentRole}` : ""}
-                </p>
-              </div>
+      <div className="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
+        {isLoading ? (
+          <Spinner />
+        ) : error ? (
+          <Notice tone="error">{error}</Notice>
+        ) : alumni.length === 0 ? (
+          <EmptyState title="No alumni yet" description={`Brothers who graduated in ${cutoff} or earlier will show up here.`} />
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {alumni.map((alum) => (
               <button
+                key={alum.id}
                 type="button"
-                onClick={() => setSelectedAlum(null)}
-                className="ml-4 text-sm text-[#6e6e73] hover:text-[#1d1d1f]"
+                onClick={() => setSelected(alum)}
+                className="flex items-start gap-4 rounded-[30px] bg-paper p-6 text-left transition-shadow hover:shadow-lg focus-visible:outline-2 focus-visible:outline-ink"
               >
-                Close
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink font-display text-paper">
+                  {initials(alum.name)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-lg">{alum.name}</span>
+                  <span className="block text-sm text-muted">Class of {alum.gradYear}</span>
+                  {alum.company && <span className="mt-2 block truncate text-sm text-ink-soft">{alum.company}</span>}
+                </span>
               </button>
-            </div>
-
-            <div className="space-y-3">
-              {selectedAlum.email ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                    Email
-                  </p>
-                  <a
-                    href={`mailto:${selectedAlum.email}`}
-                    className="text-sm text-[#0071e3] hover:text-[#0077ed]"
-                  >
-                    {selectedAlum.email}
-                  </a>
-                </div>
-              ) : null}
-
-              {selectedAlum.phone ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                    Phone
-                  </p>
-                  <a
-                    href={`tel:${selectedAlum.phone}`}
-                    className="text-sm text-[#1d1d1f]"
-                  >
-                    {selectedAlum.phone}
-                  </a>
-                </div>
-              ) : null}
-
-              {selectedAlum.linkedin ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-[#6e6e73] mb-1">
-                    LinkedIn
-                  </p>
-                  <a
-                    href={selectedAlum.linkedin}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-[#0071e3] hover:text-[#0077ed] break-all"
-                  >
-                    {selectedAlum.linkedin}
-                  </a>
-                </div>
-              ) : null}
-
-              {!hasContactDetails ? (
-                <p className="text-sm text-[#6e6e73]">No contact details found.</p>
-              ) : null}
-            </div>
+            ))}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      <Modal open={!!selected} onClose={close} title={selected?.name || ""}>
+        {selected && (
+          <div className="space-y-5 p-6">
+            <p className="text-sm text-muted">
+              Class of {selected.gradYear}
+              {selected.company ? ` · ${selected.company}` : ""}
+            </p>
+            <ContactRow label="Email" href={`mailto:${selected.email}`} value={selected.email} />
+            <ContactRow label="Phone" href={`tel:${selected.phone}`} value={selected.phone} />
+            <ContactRow label="LinkedIn" href={selected.linkedin} value={selected.linkedin} external />
+            {!hasContact && <p className="text-sm text-muted">No contact details on file.</p>}
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }
 

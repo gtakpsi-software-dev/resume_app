@@ -1,537 +1,386 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ExperienceCard from "@/components/experience/ExperienceCard";
+import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import { Input, Label, Select, Textarea } from "@/components/ui/Field";
+import Modal from "@/components/ui/Modal";
+import Notice from "@/components/ui/Notice";
+import PageHeader from "@/components/ui/PageHeader";
+import Spinner from "@/components/ui/Spinner";
 import { experienceAPI } from "@/lib/api";
 import { useMemberAuth } from "@/lib/MemberAuthContext";
 
-export default function Dashboard() {
-  const { user: memberUser } = useMemberAuth();
-  const [showForm, setShowForm] = useState(false);
-  const [type, setType] = useState("interview");
-  const [company, setCompany] = useState("");
-  const [role, setRole] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [description, setDescription] = useState("");
-  const [companyLogo, setCompanyLogo] = useState("");
-  const [rating, setRating] = useState("");
-  const [sentiment, setSentiment] = useState("");
-  const [interviewQuestions, setInterviewQuestions] = useState("");
-  const [advice, setAdvice] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactLinkedIn, setContactLinkedIn] = useState("");
+const emptyForm = {
+  type: "interview",
+  company: "",
+  role: "",
+  startDate: "",
+  endDate: "",
+  outcome: "",
+  description: "",
+  companyLogo: "",
+  rating: "",
+  sentiment: "",
+  interviewQuestions: "",
+  advice: "",
+  contactEmail: "",
+  contactPhone: "",
+  contactLinkedIn: "",
+};
+
+const tabs = [
+  { key: "all", label: "All" },
+  { key: "interview", label: "Interviews" },
+  { key: "internship", label: "Internships" },
+  { key: "research", label: "Research" },
+  { key: "saved", label: "Saved" },
+  { key: "mine", label: "Mine" },
+];
+
+const toForm = (exp) => ({
+  ...Object.fromEntries(Object.keys(emptyForm).map((k) => [k, exp[k] ?? ""])),
+  startDate: exp.startDate ? exp.startDate.slice(0, 10) : "",
+  endDate: exp.endDate ? exp.endDate.slice(0, 10) : "",
+  rating: typeof exp.rating === "number" ? String(exp.rating) : "",
+});
+
+const ownerOf = (exp) => String(exp.user?._id || exp.user?.id || exp.user);
+
+function ExperienceForm({ form, setField, onSubmit, onCancel, submitting, editing, error }) {
+  const isInterview = form.type === "interview";
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5 p-6">
+      <Notice tone="error">{error}</Notice>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="type">Type</Label>
+          <Select id="type" value={form.type} onChange={setField("type")}>
+            <option value="interview">Interview</option>
+            <option value="internship">Internship</option>
+            <option value="research">Research</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="company">Company or institution</Label>
+          <Input id="company" value={form.company} onChange={setField("company")} placeholder="Google, Georgia Tech" required />
+        </div>
+        <div>
+          <Label htmlFor="role">Role</Label>
+          <Input id="role" value={form.role} onChange={setField("role")} placeholder="Software Engineering Intern" required />
+        </div>
+        <div>
+          <Label htmlFor="companyLogo" hint="Optional">Logo URL</Label>
+          <Input id="companyLogo" type="url" value={form.companyLogo} onChange={setField("companyLogo")} placeholder="https://example.com/logo.png" />
+        </div>
+        <div>
+          <Label htmlFor="startDate">Start date</Label>
+          <Input id="startDate" type="date" value={form.startDate} onChange={setField("startDate")} required />
+        </div>
+        <div>
+          <Label htmlFor="endDate" hint="Optional">End date</Label>
+          <Input id="endDate" type="date" value={form.endDate} onChange={setField("endDate")} />
+        </div>
+        {isInterview && (
+          <div>
+            <Label htmlFor="outcome">Outcome</Label>
+            <Select id="outcome" value={form.outcome} onChange={setField("outcome")}>
+              <option value="">Select outcome</option>
+              <option value="pending">Pending</option>
+              <option value="offered">Offered</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrew">Withdrew</option>
+            </Select>
+          </div>
+        )}
+        <div>
+          <Label htmlFor="rating">Rating</Label>
+          <Select id="rating" value={form.rating} onChange={setField("rating")}>
+            <option value="">No rating</option>
+            <option value="1">1 – Poor</option>
+            <option value="2">2 – Fair</option>
+            <option value="3">3 – Average</option>
+            <option value="4">4 – Good</option>
+            <option value="5">5 – Excellent</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="sentiment">Overall feeling</Label>
+          <Select id="sentiment" value={form.sentiment} onChange={setField("sentiment")}>
+            <option value="">Select one</option>
+            <option value="positive">Positive</option>
+            <option value="neutral">Neutral</option>
+            <option value="negative">Negative</option>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="description" hint="Optional">Details</Label>
+        <Textarea id="description" rows={3} value={form.description} onChange={setField("description")} placeholder="What was it like?" />
+      </div>
+      {isInterview && (
+        <div>
+          <Label htmlFor="interviewQuestions" hint="Optional">Interview questions</Label>
+          <Textarea id="interviewQuestions" rows={3} value={form.interviewQuestions} onChange={setField("interviewQuestions")} placeholder="Questions you were asked" />
+        </div>
+      )}
+      <div>
+        <Label htmlFor="advice" hint="Optional">Advice</Label>
+        <Textarea id="advice" rows={3} value={form.advice} onChange={setField("advice")} placeholder="Tips for the next brother" />
+      </div>
+
+      <fieldset className="border-t border-line pt-5">
+        <legend className="pr-2 font-display text-xs uppercase tracking-[0.2em] text-muted">Preferred contact, optional</legend>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="contactEmail">Email</Label>
+            <Input id="contactEmail" type="email" value={form.contactEmail} onChange={setField("contactEmail")} placeholder="you@gatech.edu" />
+          </div>
+          <div>
+            <Label htmlFor="contactPhone">Phone</Label>
+            <Input id="contactPhone" type="tel" value={form.contactPhone} onChange={setField("contactPhone")} placeholder="(555) 555-5555" />
+          </div>
+          <div>
+            <Label htmlFor="contactLinkedIn">LinkedIn</Label>
+            <Input id="contactLinkedIn" type="url" value={form.contactLinkedIn} onChange={setField("contactLinkedIn")} placeholder="https://linkedin.com/in/you" />
+          </div>
+        </div>
+      </fieldset>
+
+      <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting ? "Saving..." : editing ? "Save changes" : "Share experience"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Dashboard() {
+  const { user } = useMemberAuth();
   const [experiences, setExperiences] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState(null);
+  const [tab, setTab] = useState("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-
-  useEffect(() => {
-    fetchExperiences();
-  }, []);
-
-  const toggleForm = () => {
-    setError("");
-    setSuccess("");
-    if (showForm) {
-      resetForm();
-      setEditingId(null);
-    }
-    setShowForm((v) => !v);
-  };
-
-  const resetForm = () => {
-    setType("interview");
-    setCompany("");
-    setRole("");
-    setStartDate("");
-    setEndDate("");
-    setOutcome("");
-    setDescription("");
-    setCompanyLogo("");
-    setRating("");
-    setSentiment("");
-    setInterviewQuestions("");
-    setAdvice("");
-    setContactEmail("");
-    setContactPhone("");
-    setContactLinkedIn("");
-  };
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchExperiences = async () => {
     try {
-      setLoading(true);
       const { data } = await experienceAPI.getAllExperiences();
       setExperiences(data.data || []);
+      setLoadError("");
     } catch (err) {
-      console.error("Failed to fetch experiences:", err);
-      setExperiences([]);
+      setLoadError(
+        err.response?.status === 403
+          ? "Experiences are only available to member accounts."
+          : "Couldn't load experiences. Check your connection and try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchExperiences();
+  }, []);
+
+  const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const openForm = (exp) => {
+    setEditingId(exp?._id || null);
+    setForm(exp ? toForm(exp) : emptyForm);
+    setFormError("");
+    setFormOpen(true);
+  };
+
+  const closeForm = () => setFormOpen(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    if (!form.company.trim() || !form.role.trim() || !form.startDate) {
+      setFormError("Company, role, and start date are required.");
+      return;
+    }
 
-    if (!company.trim()) {
-      setError("Company is required");
-      return;
-    }
-    if (!role.trim()) {
-      setError("Role/Position is required");
-      return;
-    }
-    if (!startDate) {
-      setError("Start date is required");
-      return;
-    }
+    const payload = {
+      ...Object.fromEntries(Object.entries(form).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])),
+      endDate: form.endDate || null,
+      outcome: form.type === "interview" ? form.outcome : "",
+      interviewQuestions: form.type === "interview" ? form.interviewQuestions.trim() : "",
+      rating: form.rating ? Number(form.rating) : null,
+    };
 
     setSubmitting(true);
-
+    setFormError("");
     try {
-      const payload = {
-        type,
-        company: company.trim(),
-        role: role.trim(),
-        startDate,
-        endDate: endDate || null,
-        outcome: type === "interview" ? outcome : "",
-        description: description.trim() || "",
-        companyLogo: companyLogo.trim() || "",
-        rating: rating ? Number(rating) : null,
-        sentiment: sentiment || "",
-        interviewQuestions: interviewQuestions.trim() || "",
-        advice: advice.trim() || "",
-        contactEmail: contactEmail.trim() || "",
-        contactPhone: contactPhone.trim() || "",
-        contactLinkedIn: contactLinkedIn.trim() || "",
-      };
-
-      if (editingId) {
-        await experienceAPI.update(editingId, payload);
-        setSuccess("Experience updated successfully!");
-      } else {
-        await experienceAPI.create(payload);
-        setSuccess("Experience added successfully!");
-      }
-
-      resetForm();
-      setEditingId(null);
-      fetchExperiences();
+      if (editingId) await experienceAPI.update(editingId, payload);
+      else await experienceAPI.create(payload);
+      setNotice({ tone: "success", text: editingId ? "Experience updated." : "Thanks for sharing your experience." });
+      setFormOpen(false);
+      await fetchExperiences();
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        err.message ||
-        (editingId ? "Failed to update experience" : "Failed to add experience");
-      setError(msg);
+      setFormError(err.response?.data?.message || "Couldn't save the experience. Try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this experience?")) return;
+  const confirmDelete = async () => {
+    setDeleting(true);
     try {
-      await experienceAPI.delete(id);
-      setSuccess("Experience deleted.");
-      fetchExperiences();
+      await experienceAPI.delete(pendingDelete._id);
+      setNotice({ tone: "success", text: "Experience deleted." });
+      await fetchExperiences();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete.");
+      setNotice({ tone: "error", text: err.response?.data?.message || "Couldn't delete the experience." });
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
     }
-  };
-
-  const handleEdit = (experience) => {
-    if (!experience) return;
-    setEditingId(experience._id);
-    setShowForm(true);
-    setError("");
-    setSuccess("");
-
-    setType(experience.type || "interview");
-    setCompany(experience.company || "");
-    setRole(experience.role || "");
-    setStartDate(experience.startDate ? experience.startDate.slice(0, 10) : "");
-    setEndDate(experience.endDate ? experience.endDate.slice(0, 10) : "");
-    setOutcome(experience.outcome || "");
-    setDescription(experience.description || "");
-    setCompanyLogo(experience.companyLogo || "");
-    setRating(
-      typeof experience.rating === "number" ? String(experience.rating) : ""
-    );
-    setSentiment(experience.sentiment || "");
-    setInterviewQuestions(experience.interviewQuestions || "");
-    setAdvice(experience.advice || "");
-    setContactEmail(experience.contactEmail || "");
-    setContactPhone(experience.contactPhone || "");
-    setContactLinkedIn(experience.contactLinkedIn || "");
   };
 
   const handleToggleBookmark = async (id) => {
     try {
       await experienceAPI.toggleBookmark(id);
       await fetchExperiences();
-    } catch (err) {
-      console.error("Failed to toggle bookmark", err);
-      setError("Failed to update saved state. Please try again.");
+    } catch {
+      setNotice({ tone: "error", text: "Couldn't update saved experiences. Try again." });
     }
   };
 
-  return (
-    <ProtectedRoute>
-      <div className="min-h-[calc(100vh-64px)] bg-[#f5f5f7] py-8 px-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-semibold text-[#1d1d1f] mb-2">
-            Brother Experiences
-          </h1>
-          <p className="text-[#6e6e73] mb-8">
-            Add your past interviews, internships, and research experiences.
-          </p>
+  const visible = experiences.filter((exp) => {
+    if (tab === "all") return true;
+    if (tab === "saved") return exp.bookmarkedBy?.some((u) => String(u) === String(user?.id));
+    if (tab === "mine") return ownerOf(exp) === String(user?.id);
+    return exp.type === tab;
+  });
 
-          <div className="bg-white rounded-2xl shadow-sm p-6">
+  let content;
+  if (loading) {
+    content = <Spinner />;
+  } else if (loadError) {
+    content = (
+      <EmptyState
+        title="Something went wrong"
+        description={loadError}
+        action={<Button variant="outline" onClick={() => { setLoading(true); fetchExperiences(); }}>Try again</Button>}
+      />
+    );
+  } else if (experiences.length === 0) {
+    content = (
+      <EmptyState
+        title="No experiences yet"
+        description="Be the first brother to share an interview, internship, or research experience."
+        action={<Button onClick={() => openForm()}>Share an experience</Button>}
+      />
+    );
+  } else if (visible.length === 0) {
+    content = <EmptyState title="Nothing here" description="No experiences match this filter yet." />;
+  } else {
+    content = (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {visible.map((exp) => (
+          <ExperienceCard
+            key={exp._id}
+            experience={exp}
+            currentUserId={user?.id}
+            onEdit={openForm}
+            onDelete={setPendingDelete}
+            onToggleBookmark={handleToggleBookmark}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Brothers helping brothers"
+        title="Experiences"
+        description="Interviews, internships, and research, written up by the brothers who went through them."
+      >
+        <Button variant="inverse" onClick={() => openForm()}>Share an experience</Button>
+      </PageHeader>
+
+      <section className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
+        {notice && (
+          <Notice tone={notice.tone} className="mb-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-medium text-[#1d1d1f] mb-1">
-                  Brother Experiences
-                </h2>
-                <p className="text-sm text-[#6e6e73]">
-                  Experiences shared by all brothers — add yours to contribute
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={toggleForm}
-                aria-expanded={showForm}
-                className="shrink-0 rounded-full bg-[#0071e3] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
-              >
-                {showForm ? "Close" : "Add experience"}
+              <span>{notice.text}</span>
+              <button type="button" onClick={() => setNotice(null)} className="text-xs uppercase tracking-[0.15em] opacity-70 hover:opacity-100">
+                Dismiss
               </button>
             </div>
+          </Notice>
+        )}
 
-            {showForm && (
-              <div className="mt-6 rounded-2xl border border-[#e8e8ed] bg-[#fbfbfd] p-5">
-                <h3 className="text-lg font-medium text-[#1d1d1f] mb-1">
-                  {editingId ? "Edit Experience" : "Add Experience"}
-                </h3>
-                {editingId && (
-                  <p className="text-xs text-[#6e6e73] mb-3">
-                    You&apos;re updating an experience you previously shared.
-                  </p>
-                )}
-
-                {error && (
-                  <div className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-100">
-                    {error}
-                  </div>
-                )}
-                {success && (
-                  <div className="mb-4 rounded-xl bg-green-50 p-4 text-sm text-green-700 border border-green-100">
-                    {success}
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Type <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={type}
-                      onChange={(e) => setType(e.target.value)}
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    >
-                      <option value="interview">Interview</option>
-                      <option value="internship">Internship</option>
-                      <option value="research">Research</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Company / Institution <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder="e.g. Google, Georgia Tech"
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Company logo URL
-                    </label>
-                    <input
-                      type="url"
-                      value={companyLogo}
-                      onChange={(e) => setCompanyLogo(e.target.value)}
-                      placeholder="https://example.com/logo.png"
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Role / Position <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      placeholder="e.g. Software Engineer Intern, Research Assistant"
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Start Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    />
-                  </div>
-
-                  {type === "interview" && (
-                    <div>
-                      <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                        Offer status / Outcome
-                      </label>
-                      <select
-                        value={outcome}
-                        onChange={(e) => setOutcome(e.target.value)}
-                        className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                      >
-                        <option value="">Select outcome</option>
-                        <option value="pending">Pending</option>
-                        <option value="offered">Offered</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="withdrew">Withdrew</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Rating (1–5)
-                    </label>
-                    <select
-                      value={rating}
-                      onChange={(e) => setRating(e.target.value)}
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    >
-                      <option value="">No rating</option>
-                      <option value="1">1 – Poor</option>
-                      <option value="2">2 – Fair</option>
-                      <option value="3">3 – Average</option>
-                      <option value="4">4 – Good</option>
-                      <option value="5">5 – Excellent</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Sentiment
-                    </label>
-                    <select
-                      value={sentiment}
-                      onChange={(e) => setSentiment(e.target.value)}
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                    >
-                      <option value="">Select sentiment</option>
-                      <option value="positive">Positive</option>
-                      <option value="neutral">Neutral</option>
-                      <option value="negative">Negative</option>
-                    </select>
-                  </div>
-
-                  <div className="border-t border-[#e8e8ed] pt-4">
-                    <p className="text-xs font-medium text-[#6e6e73] mb-2">
-                      Preferred contact (optional)
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          Email
-                        </label>
-                        <input
-                          type="email"
-                          value={contactEmail}
-                          onChange={(e) => setContactEmail(e.target.value)}
-                          placeholder="you@gatech.edu"
-                          className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          Phone
-                        </label>
-                        <input
-                          type="tel"
-                          value={contactPhone}
-                          onChange={(e) => setContactPhone(e.target.value)}
-                          placeholder="(555) 555-5555"
-                          className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          LinkedIn
-                        </label>
-                        <input
-                          type="url"
-                          value={contactLinkedIn}
-                          onChange={(e) => setContactLinkedIn(e.target.value)}
-                          placeholder="https://www.linkedin.com/in/you"
-                          className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                      Experience details
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      placeholder="Brief description of the experience (optional)"
-                      className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm resize-none"
-                    />
-                  </div>
-
-                  {type === "interview" && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                          Interview questions
-                        </label>
-                        <textarea
-                          value={interviewQuestions}
-                          onChange={(e) => setInterviewQuestions(e.target.value)}
-                          rows={3}
-                          placeholder="Questions you were asked (optional)"
-                          className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm resize-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                          Advice
-                        </label>
-                        <textarea
-                          value={advice}
-                          onChange={(e) => setAdvice(e.target.value)}
-                          rows={3}
-                          placeholder="Tips for future interviewees (optional)"
-                          className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm resize-none"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {(type === "internship" || type === "research") && (
-                    <div>
-                      <label className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                        Advice
-                      </label>
-                      <textarea
-                        value={advice}
-                        onChange={(e) => setAdvice(e.target.value)}
-                        rows={3}
-                        placeholder="Tips for others (optional)"
-                        className="w-full rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm resize-none"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="flex-1 rounded-full bg-[#0071e3] px-4 py-3 font-medium text-white hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {submitting
-                        ? editingId
-                          ? "Saving..."
-                          : "Adding..."
-                        : editingId
-                        ? "Save Changes"
-                        : "Add Experience"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleForm}
-                      className="flex-1 rounded-full border border-[#d2d2d7] bg-white px-4 py-3 font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            <div className={showForm ? "mt-6" : "mt-6"}>
-              {loading ? (
-                <div className="flex justify-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0071e3]" />
-                </div>
-              ) : experiences.length === 0 ? (
-                <div className="text-center py-12 text-[#6e6e73]">
-                  <p>No experiences shared yet.</p>
-                  <p className="text-sm mt-1">Click “Add experience” to be the first.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {experiences.map((exp) => (
-                    <ExperienceCard
-                      key={exp._id}
-                      experience={exp}
-                      currentUserId={memberUser?.id}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+        {!loading && !loadError && experiences.length > 0 && (
+          <div className="mb-8 flex gap-2 overflow-x-auto pb-1">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`shrink-0 rounded-full px-4 py-2 font-display text-xs uppercase tracking-[0.15em] transition-colors ${
+                  tab === t.key ? "bg-ink text-paper" : "border border-line bg-paper text-ink-soft hover:border-ink"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
+        )}
 
-          <div className="mt-8 text-center">
-            <Link
-              href="/search"
-              className="text-[#0071e3] hover:text-[#0077ed] font-medium"
-            >
-              ← Back to Resume Search
-            </Link>
+        {content}
+      </section>
+
+      <Modal open={formOpen} onClose={closeForm} title={editingId ? "Edit experience" : "Share an experience"} size="lg">
+        <ExperienceForm
+          form={form}
+          setField={setField}
+          onSubmit={handleSubmit}
+          onCancel={closeForm}
+          submitting={submitting}
+          editing={!!editingId}
+          error={formError}
+        />
+      </Modal>
+
+      <Modal open={!!pendingDelete} onClose={() => !deleting && setPendingDelete(null)} title="Delete experience">
+        <div className="space-y-6 p-6">
+          <p className="text-ink-soft">
+            Delete your {pendingDelete?.role} experience at {pendingDelete?.company}? This can&apos;t be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="danger" size="sm" onClick={confirmDelete} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
           </div>
         </div>
-      </div>
+      </Modal>
+    </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <Dashboard />
     </ProtectedRoute>
   );
 }

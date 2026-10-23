@@ -1,17 +1,48 @@
 "use client";
 
 import { useState } from "react";
-import {
-  BuildingOfficeIcon,
-  CalendarIcon,
-  ChevronRightIcon,
-  StarIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { BuildingOfficeIcon, StarIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import Modal from "@/components/ui/Modal";
+import Tag from "@/components/ui/Tag";
 
-export default function ExperienceCard({ experience, currentUserId, onDelete }) {
-  const [showFullDetails, setShowFullDetails] = useState(false);
+const typeLabels = { interview: "Interview", internship: "Internship", research: "Research" };
+const outcomeLabels = { offered: "Offered", rejected: "Rejected", withdrew: "Withdrew", pending: "Pending" };
+const outcomeStyles = {
+  offered: "bg-success/10 text-success",
+  rejected: "bg-danger/10 text-danger",
+};
+const sentimentLabels = { positive: "Positive", neutral: "Neutral", negative: "Negative" };
+
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : "";
+
+function Stars({ rating }) {
+  return (
+    <span className="flex items-center gap-0.5" aria-label={`${rating} out of 5`}>
+      {[1, 2, 3, 4, 5].map((n) =>
+        n <= rating ? (
+          <StarIconSolid key={n} className="h-4 w-4 text-ink" />
+        ) : (
+          <StarIcon key={n} className="h-4 w-4 text-line" />
+        )
+      )}
+    </span>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div>
+      <h3 className="mb-2 font-display text-xs uppercase tracking-[0.2em] text-muted">{title}</h3>
+      <div className="whitespace-pre-wrap text-ink-soft">{children}</div>
+    </div>
+  );
+}
+
+export default function ExperienceCard({ experience, currentUserId, onEdit, onDelete, onToggleBookmark }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   if (!experience) return null;
 
@@ -36,333 +67,109 @@ export default function ExperienceCard({ experience, currentUserId, onDelete }) 
     bookmarkedBy,
   } = experience;
 
-  const formatDate = (d) => {
-    if (!d) return "";
-    const date = new Date(d);
-    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  };
-
-  const typeLabel = (t) => {
-    if (t === "interview") return "Interview";
-    if (t === "internship") return "Internship";
-    if (t === "research") return "Research";
-    return t;
-  };
-
-  const outcomeLabel = (o) => {
-    if (!o) return null;
-    const labels = {
-      offered: "Offered",
-      rejected: "Rejected",
-      withdrew: "Withdrew",
-      pending: "Pending",
-    };
-    return labels[o] || o;
-  };
-
-  const outcomeColor = (o) => {
-    const colors = {
-      offered: "bg-green-100 text-green-800",
-      rejected: "bg-red-100 text-red-800",
-      withdrew: "bg-amber-100 text-amber-800",
-      pending: "bg-blue-100 text-blue-800",
-    };
-    return colors[o] || "bg-gray-100 text-gray-800";
-  };
-
-  const sentimentLabel = (s) => {
-    if (!s) return null;
-    const labels = { positive: "Positive", neutral: "Neutral", negative: "Negative" };
-    return labels[s] || s;
-  };
-
-  const sentimentColor = (s) => {
-    const colors = {
-      positive: "text-green-600",
-      neutral: "text-gray-600",
-      negative: "text-red-600",
-    };
-    return colors[s] || "text-gray-600";
-  };
-
-  const ownerId =
-    user && typeof user === "object" ? user._id || user.id || user : user;
-  const ownerName =
-    user && typeof user === "object"
-      ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || null
-      : null;
-
-  const isOwnExperience =
-    currentUserId && String(ownerId) === String(currentUserId);
-
-  const isBookmarked =
-    Array.isArray(bookmarkedBy) &&
-    currentUserId &&
-    bookmarkedBy.some((u) => String(u) === String(currentUserId));
-
-  const handleDelete = () => {
-    if (confirm("Delete this experience?")) onDelete?.(_id);
-  };
-
-  const hasFullDetails = description?.trim() || interviewQuestions?.trim() || advice?.trim();
+  const ownerId = user && typeof user === "object" ? user._id || user.id : user;
+  const ownerName = user && typeof user === "object" ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "";
+  const isOwn = currentUserId && String(ownerId) === String(currentUserId);
+  const isBookmarked = currentUserId && bookmarkedBy?.some((u) => String(u) === String(currentUserId));
+  const dates = `${formatDate(startDate)}${endDate ? ` – ${formatDate(endDate)}` : ""}`;
+  const hasContact = contactEmail || contactPhone || contactLinkedIn;
+  const actionClass = "font-display text-xs uppercase tracking-[0.15em]";
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full">
-        <div className="p-6 flex-grow">
-          {/* Top row: company + bookmark */}
-          <div className="flex items-start gap-4 mb-4">
-            <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-[#f5f5f7] flex items-center justify-center overflow-hidden">
-              {companyLogo ? (
-                <img
-                  src={companyLogo}
-                  alt={company}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    e.target.nextSibling?.classList.remove("hidden");
-                  }}
-                />
-              ) : null}
-              <div
-                className={`w-full h-full flex items-center justify-center ${
-                  companyLogo ? "hidden" : ""
-                }`}
-              >
-                <BuildingOfficeIcon className="w-7 h-7 text-[#86868b]" />
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-[#1d1d1f] truncate">
-                {company}
-              </h3>
-              <p className="text-[#0071e3] font-medium truncate">{role}</p>
-              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#0071e3]/10 text-[#0071e3]">
-                {typeLabel(type)}
-              </span>
-              {ownerName && (
-                <p className="mt-1 text-xs text-[#6e6e73]">
-                  Shared by <span className="font-medium text-[#1d1d1f]">{ownerName}</span>
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => onToggleBookmark?.(_id)}
-              className="ml-2 inline-flex items-center justify-center rounded-full p-1.5 hover:bg-[#f5f5f7] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
-              aria-label={isBookmarked ? "Remove from saved" : "Save to revisit"}
-            >
-              {isBookmarked ? (
-                <StarIconSolid className="w-5 h-5 text-amber-500" />
-              ) : (
-                <StarIcon className="w-5 h-5 text-[#d2d2d7]" />
-              )}
-            </button>
-          </div>
-
-          {/* Offer Status */}
-          {outcome && (
-            <div className="mb-3">
-              <span
-                className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${outcomeColor(
-                  outcome
-                )}`}
-              >
-                Offer: {outcomeLabel(outcome)}
-              </span>
-            </div>
-          )}
-
-          {/* Experience details (brief) */}
-          {description && (
-            <p className="text-sm text-[#6e6e73] line-clamp-3 mb-3">
-              {description}
-            </p>
-          )}
-
-          {/* Date range */}
-          <div className="flex items-center gap-1.5 text-sm text-[#6e6e73] mb-3">
-            <CalendarIcon className="w-4 h-4 flex-shrink-0" />
-            <span>
-              {formatDate(startDate)}
-              {endDate && ` – ${formatDate(endDate)}`}
-            </span>
-          </div>
-
-          {/* Contact info */}
-          {(contactEmail || contactPhone || contactLinkedIn) && (
-            <div className="mb-3 text-xs text-[#6e6e73] space-y-1">
-              <p className="font-medium text-[#1d1d1f]">Preferred contact</p>
-              {contactEmail && <p>Email: <span className="font-medium">{contactEmail}</span></p>}
-              {contactPhone && <p>Phone: <span className="font-medium">{contactPhone}</span></p>}
-              {contactLinkedIn && (
-                <p>
-                  LinkedIn:{" "}
-                  <a
-                    href={contactLinkedIn}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-[#0071e3] hover:text-[#0077ed]"
-                  >
-                    View profile
-                  </a>
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Rating / Sentiment */}
-          {(rating || sentiment) && (
-            <div className="flex items-center gap-3 flex-wrap mb-4">
-              {rating && (
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <span key={n} className="text-amber-500">
-                      {n <= rating ? (
-                        <StarIconSolid className="w-4 h-4" />
-                      ) : (
-                        <StarIcon className="w-4 h-4 text-[#d2d2d7]" />
-                      )}
-                    </span>
-                  ))}
-                  <span className="text-xs text-[#6e6e73] ml-1">
-                    {rating}/5
-                  </span>
-                </div>
-              )}
-              {sentiment && (
-                <span
-                  className={`text-xs font-medium ${sentimentColor(sentiment)}`}
-                >
-                  {sentimentLabel(sentiment)}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between mt-auto pt-3 border-t border-[#e8e8ed]">
-            {hasFullDetails ? (
-              <button
-                onClick={() => setShowFullDetails(true)}
-                className="flex items-center gap-1 font-medium text-[#0071e3] hover:text-[#0077ed] transition-colors focus:outline-none"
-              >
-                View full details
-                <ChevronRightIcon className="w-4 h-4" />
-              </button>
+      <article className="flex h-full flex-col rounded-[30px] border border-line bg-paper p-6 transition-shadow hover:shadow-lg">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-mist">
+            {companyLogo && !logoFailed ? (
+              <img src={companyLogo} alt={company} className="h-full w-full object-contain" onError={() => setLogoFailed(true)} />
             ) : (
-              <span />
-            )}
-            {isOwnExperience && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => onEdit?.(experience)}
-                  className="text-sm text-[#0071e3] hover:text-[#0077ed] font-medium"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="text-sm text-red-500 hover:text-red-600 font-medium"
-                >
-                  Delete
-                </button>
-              </div>
+              <BuildingOfficeIcon className="h-7 w-7 text-muted" />
             )}
           </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-display text-lg uppercase tracking-[0.06em]">{company}</h3>
+            <p className="truncate text-ink-soft">{role}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleBookmark?.(_id)}
+            className="rounded-full p-1.5 hover:bg-mist"
+            aria-label={isBookmarked ? "Remove from saved" : "Save"}
+            aria-pressed={!!isBookmarked}
+          >
+            {isBookmarked ? <StarIconSolid className="h-5 w-5 text-ink" /> : <StarIcon className="h-5 w-5 text-muted" />}
+          </button>
         </div>
-      </div>
 
-      {/* Full details modal */}
-      {showFullDetails && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="p-6 border-b border-[#e8e8ed] flex justify-between items-start">
-              <div>
-                <h2 className="text-xl font-semibold text-[#1d1d1f]">
-                  {role} at {company}
-                </h2>
-                <p className="text-sm text-[#6e6e73] mt-1">
-                  {typeLabel(type)} • {formatDate(startDate)}
-                  {endDate && ` – ${formatDate(endDate)}`}
-                </p>
-                {ownerName && (
-                  <p className="text-xs text-[#6e6e73] mt-1">
-                    Shared by <span className="font-medium text-[#1d1d1f]">{ownerName}</span>
-                  </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Tag tone="dark">{typeLabels[type] || type}</Tag>
+          {outcome && (
+            <span className={`rounded-full px-3 py-1 text-xs ${outcomeStyles[outcome] || "border border-line bg-mist text-ink-soft"}`}>
+              {outcomeLabels[outcome] || outcome}
+            </span>
+          )}
+          <span className="text-sm text-muted">{dates}</span>
+        </div>
+
+        {description && <p className="mt-4 line-clamp-3 text-sm text-ink-soft">{description}</p>}
+
+        {(rating || sentiment) && (
+          <div className="mt-4 flex items-center gap-3 text-sm text-muted">
+            {rating && <Stars rating={rating} />}
+            {sentiment && <span>{sentimentLabels[sentiment] || sentiment}</span>}
+          </div>
+        )}
+
+        {ownerName && <p className="mt-4 text-xs text-muted">Shared by {ownerName}</p>}
+
+        <div className="mt-auto flex items-center justify-between border-t border-line pt-4">
+          <button type="button" onClick={() => setShowDetails(true)} className={`${actionClass} text-ink hover:underline underline-offset-4`}>
+            Details &rarr;
+          </button>
+          {isOwn && (
+            <div className="flex gap-4">
+              <button type="button" onClick={() => onEdit?.(experience)} className={`${actionClass} text-ink-soft hover:text-ink`}>
+                Edit
+              </button>
+              <button type="button" onClick={() => onDelete?.(experience)} className={`${actionClass} text-danger hover:text-danger/80`}>
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </article>
+
+      <Modal open={showDetails} onClose={() => setShowDetails(false)} title={`${role} at ${company}`}>
+        <div className="space-y-6 p-6">
+          <p className="text-sm text-muted">
+            {typeLabels[type] || type} · {dates}
+            {ownerName && ` · Shared by ${ownerName}`}
+          </p>
+          {description && <Section title="Details">{description}</Section>}
+          {interviewQuestions && <Section title="Interview questions">{interviewQuestions}</Section>}
+          {advice && <Section title="Advice">{advice}</Section>}
+          {hasContact && (
+            <Section title="Preferred contact">
+              <div className="space-y-1">
+                {contactEmail && (
+                  <a href={`mailto:${contactEmail}`} className="block underline-offset-4 hover:underline">
+                    {contactEmail}
+                  </a>
+                )}
+                {contactPhone && <p>{contactPhone}</p>}
+                {contactLinkedIn && (
+                  <a href={contactLinkedIn} target="_blank" rel="noopener noreferrer" className="block underline-offset-4 hover:underline">
+                    LinkedIn profile
+                  </a>
                 )}
               </div>
-              <button
-                onClick={() => setShowFullDetails(false)}
-                className="text-[#6e6e73] hover:text-[#1d1d1f] p-1"
-                aria-label="Close"
-              >
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {(contactEmail || contactPhone || contactLinkedIn) && (
-                <div>
-                  <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
-                    Preferred contact
-                  </h3>
-                  <div className="text-sm text-[#6e6e73] space-y-1">
-                    {contactEmail && <p>Email: <span className="font-medium">{contactEmail}</span></p>}
-                    {contactPhone && <p>Phone: <span className="font-medium">{contactPhone}</span></p>}
-                    {contactLinkedIn && (
-                      <p>
-                        LinkedIn:{" "}
-                        <a
-                          href={contactLinkedIn}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-[#0071e3] hover:text-[#0077ed]"
-                        >
-                          View profile
-                        </a>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {description && (
-                <div>
-                  <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
-                    Experience details
-                  </h3>
-                  <p className="text-sm text-[#6e6e73] whitespace-pre-wrap">
-                    {description}
-                  </p>
-                </div>
-              )}
-              {interviewQuestions && (
-                <div>
-                  <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
-                    Interview questions
-                  </h3>
-                  <p className="text-sm text-[#6e6e73] whitespace-pre-wrap">
-                    {interviewQuestions}
-                  </p>
-                </div>
-              )}
-              {advice && (
-                <div>
-                  <h3 className="text-sm font-medium text-[#1d1d1f] mb-2">
-                    Advice
-                  </h3>
-                  <p className="text-sm text-[#6e6e73] whitespace-pre-wrap">
-                    {advice}
-                  </p>
-                </div>
-              )}
-              {!description && !interviewQuestions && !advice && (
-                <p className="text-sm text-[#6e6e73]">
-                  No additional details available.
-                </p>
-              )}
-            </div>
-          </div>
+            </Section>
+          )}
+          {!description && !interviewQuestions && !advice && !hasContact && (
+            <p className="text-muted">No additional details were shared.</p>
+          )}
         </div>
-      )}
+      </Modal>
     </>
   );
 }

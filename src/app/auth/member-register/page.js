@@ -1,250 +1,109 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemberAuth } from "@/lib/MemberAuthContext";
+import Button from "@/components/ui/Button";
+import { Input, Label } from "@/components/ui/Field";
+import Notice from "@/components/ui/Notice";
 
-// Registration form component
-function RegistrationForm() {
-  const [email, setEmail] = useState("");
-  const [confirmEmail, setConfirmEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [accessCode, setAccessCode] = useState("");
+const initialForm = {
+  email: "",
+  confirmEmail: "",
+  firstName: "",
+  lastName: "",
+  password: "",
+  confirmPassword: "",
+  accessCode: "",
+};
+
+export default function MemberRegisterPage() {
+  const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
   const router = useRouter();
   const { signUp } = useMemberAuth();
-  
+
+  const update = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const validate = () => {
+    if (form.email !== form.confirmEmail) return "Email addresses do not match";
+    if (form.password !== form.confirmPassword) return "Passwords do not match";
+    if (form.password.length < 8) return "Password should be at least 8 characters";
+    if (!form.firstName.trim() || !form.lastName.trim()) return "First name and last name are required";
+    return "";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    
-    // Validate inputs
-    if (email !== confirmEmail) {
-      setError("Email addresses do not match");
-      return;
-    }
-    
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    
-    if (password.length < 8) {
-      setError("Password should be at least 8 characters");
-      return;
-    }
-    
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("First name and last name are required");
-      return;
-    }
-    
+    const problem = validate();
+    setError(problem);
+    if (problem) return;
+
     setIsLoading(true);
-    
     try {
-      await signUp(email, password, firstName, lastName, accessCode);
+      await signUp(form.email, form.password, form.firstName, form.lastName, form.accessCode);
       router.push("/auth/member-login?registered=true");
     } catch (err) {
-      console.error("Registration error:", err);
-      setError(
-        err.message || 
-        "Registration failed. Please try again."
-      );
+      setError(err.message || "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   return (
-    <div className="w-full max-w-md space-y-8 rounded-3xl bg-white p-8 shadow-sm">
-      <div className="text-center">
-        <h1 className="text-2xl font-medium text-[#1d1d1f]">Create Member Account</h1>
-        <p className="mt-2 text-sm text-[#6e6e73]">
-          Register as a fraternity member
+    <div className="flex flex-1 items-center justify-center bg-ink px-5 py-16">
+      <div className="w-full max-w-lg rounded-[30px] bg-paper p-8 sm:p-10">
+        <p className="text-center text-xs uppercase tracking-[0.3em] text-muted">Brothers</p>
+        <h1 className="mt-2 text-center font-display text-2xl uppercase tracking-[0.08em]">Create account</h1>
+
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <Notice tone="error">{error}</Notice>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="firstName">First name</Label>
+              <Input id="firstName" autoComplete="given-name" required value={form.firstName} onChange={update("firstName")} />
+            </div>
+            <div>
+              <Label htmlFor="lastName">Last name</Label>
+              <Input id="lastName" autoComplete="family-name" required value={form.lastName} onChange={update("lastName")} />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" autoComplete="email" required value={form.email} onChange={update("email")} placeholder="you@gatech.edu" />
+          </div>
+          <div>
+            <Label htmlFor="confirmEmail">Confirm email</Label>
+            <Input id="confirmEmail" type="email" autoComplete="email" required value={form.confirmEmail} onChange={update("confirmEmail")} />
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="password" hint="8+ characters">Password</Label>
+              <Input id="password" type="password" autoComplete="new-password" required value={form.password} onChange={update("password")} />
+            </div>
+            <div>
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Input id="confirmPassword" type="password" autoComplete="new-password" required value={form.confirmPassword} onChange={update("confirmPassword")} />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="accessCode" hint="Ask a chapter officer">Access code</Label>
+            <Input id="accessCode" required value={form.accessCode} onChange={update("accessCode")} />
+          </div>
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? "Creating account..." : "Create account"}
+          </Button>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-muted">
+          Already a member?{" "}
+          <Link href="/auth/member-login" className="text-ink underline underline-offset-4">
+            Sign in
+          </Link>
         </p>
       </div>
-      
-      {error && (
-        <div className="rounded-xl bg-red-50 p-4 text-sm text-red-500 border border-red-100">
-          {error}
-        </div>
-      )}
-      
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-        <div className="space-y-5">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-              placeholder="your@email.com"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="confirmEmail" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Confirm email address
-            </label>
-            <input
-              id="confirmEmail"
-              name="confirmEmail"
-              type="email"
-              required
-              value={confirmEmail}
-              onChange={(e) => setConfirmEmail(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-              placeholder="your@email.com"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              First name
-            </label>
-            <input
-              id="firstName"
-              name="firstName"
-              type="text"
-              required
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-              placeholder="John"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Last name
-            </label>
-            <input
-              id="lastName"
-              name="lastName"
-              type="text"
-              required
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-              placeholder="Doe"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Confirm password
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="accessCode" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-              Access code
-            </label>
-            <input
-              id="accessCode"
-              name="accessCode"
-              type="text"
-              required
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-              placeholder="Fraternity access code"
-            />
-            <p className="mt-1 text-xs text-[#6e6e73]">
-              Please enter the fraternity access code provided to you
-            </p>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="btn-apple w-full py-2.5"
-          >
-            {isLoading ? 'Creating account...' : 'Create account'}
-          </button>
-          
-          <div className="flex justify-between text-sm">
-            <Link href="/" className="text-[#0071e3] hover:text-[#0077ed] transition-colors">
-              Return to home
-            </Link>
-            <Link href="/auth/member-login" className="text-[#0071e3] hover:text-[#0077ed] transition-colors">
-              Already have an account?
-            </Link>
-          </div>
-        </div>
-      </form>
     </div>
   );
 }
-
-// Loading fallback component
-function RegistrationFormLoading() {
-  return (
-    <div className="w-full max-w-md space-y-8 rounded-3xl bg-white p-8 shadow-sm">
-      <div className="text-center">
-        <div className="h-8 bg-gray-200 rounded-md animate-pulse w-3/4 mx-auto mb-4"></div>
-        <div className="h-4 bg-gray-200 rounded-md animate-pulse w-4/5 mx-auto"></div>
-      </div>
-      
-      <div className="space-y-4 mt-8">
-        {/* Form field placeholders */}
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded-md animate-pulse w-1/4"></div>
-            <div className="h-10 bg-gray-200 rounded-xl animate-pulse w-full"></div>
-          </div>
-        ))}
-        
-        <div className="h-12 bg-gray-200 rounded-xl animate-pulse w-full mt-6"></div>
-      </div>
-    </div>
-  );
-}
-
-export default function MemberRegisterPage() {
-  return (
-    <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-12 bg-[#f5f5f7]">
-      <Suspense fallback={<RegistrationFormLoading />}>
-        <RegistrationForm />
-      </Suspense>
-    </div>
-  );
-} 

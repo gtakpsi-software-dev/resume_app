@@ -1,176 +1,89 @@
 "use client";
 
 import { useState } from "react";
-import { formatGraduationYear } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/AuthContext";
 import { resumeAPI } from "@/lib/api";
-import { BriefcaseIcon, AcademicCapIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
+import Notice from "@/components/ui/Notice";
+import Spinner from "@/components/ui/Spinner";
+import Tag from "@/components/ui/Tag";
 
-const PdfViewer = dynamic(() => import("./PdfViewer"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex justify-center items-center h-40">
-      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0071e3]"></div>
-    </div>
-  ),
-});
+const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false, loading: () => <Spinner /> });
+
+const known = (value) => value && value !== "Unspecified";
 
 export default function ResumeCard({ resume, onDelete }) {
-  const [showPdf, setShowPdf] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const { user } = useAuth();
-  
-  const isAdmin = user?.role === 'admin';
+  const { isAuthenticated: isAdmin } = useAuth();
+  const [viewing, setViewing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
-  if (!resume) return null;
+  const { id, name, major, graduationYear, signedPdfUrl, companies = [] } = resume;
+  const details = [known(major) && major, known(graduationYear) && `Class of ${graduationYear}`].filter(Boolean);
 
-  const { id, name, major, graduationYear, pdfUrl, signedPdfUrl, companies } = resume;
-
-  const companyList = Array.isArray(companies) ? companies : [];
-
-  const togglePdfView = () => {
-    setShowPdf(!showPdf);
-  };
-  
-  const handleDeleteClick = () => {
-    setShowConfirmDialog(true);
-  };
-  
-  const handleCancelDelete = () => {
-    setShowConfirmDialog(false);
-  };
-  
-  const handleConfirmDelete = async () => {
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError("");
     try {
-      setIsDeleting(true);
       await resumeAPI.delete(id);
-      setShowConfirmDialog(false);
-      // Notify parent that this resume was deleted
-      if (onDelete) {
-        onDelete(id);
-      }
+      setConfirming(false);
+      onDelete?.(id);
     } catch (error) {
-      console.error('Error deleting resume:', error);
-      alert('Failed to delete resume. Please try again.');
+      setDeleteError(error.response?.data?.message || "Could not delete this resume. Try again.");
     } finally {
-      setIsDeleting(false);
+      setDeleting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col">
-      <div className="px-6 py-5 flex-grow">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[#1d1d1f] truncate" title={name}>{name}</h3>
-          <div className="ml-2 flex-shrink-0 flex space-x-2">
-            {isAdmin && (
-              <button
-                onClick={handleDeleteClick}
-                className="text-xs text-[#ff3b30] hover:text-red-700 transition-colors"
-                disabled={isDeleting}
-                aria-label="Delete resume"
-              >
-                {isDeleting ? '...' : 'Delete'}
-              </button>
-            )}
-          </div>
-        </div>
-        
-        <div className="mt-3 space-y-3 text-sm text-[#6e6e73]">
-          <div className="flex items-center space-x-2">
-            <AcademicCapIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-blue-50 text-[#0071e3]">
-              {major}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <CalendarIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-[#6e6e73]">
-              {formatGraduationYear(graduationYear)}
-            </span>
-          </div>
-          
-          {companyList.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <BriefcaseIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <div className="flex flex-wrap gap-1.5">
-                {companyList.map((company, index) => (
-                  <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-green-50 text-green-700">
-                    {company}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div className="mt-auto border-t border-[#e8e8ed]">
-        <button
-          onClick={togglePdfView}
-          className="w-full py-3 font-medium text-[#0071e3] hover:bg-[#f0f0f5] transition-colors focus:outline-none"
-        >
-          {showPdf ? "Hide Resume" : "View Resume"}
-        </button>
-      </div>
-      
-      {/* PDF Viewer Modal */}
-      {showPdf && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl overflow-hidden w-full max-w-5xl mx-4 max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-[#e8e8ed] flex justify-between items-center">
-              <h3 className="text-lg font-medium text-[#1d1d1f]">{name}&apos;s Resume</h3>
-              <button 
-                onClick={togglePdfView}
-                className="text-[#6e6e73] hover:text-[#1d1d1f] transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto">
-              {signedPdfUrl ? (
-                <PdfViewer pdfUrl={signedPdfUrl} fileName={`${name}.pdf`} />
-              ) : (
-                <div className="px-6 py-4 text-[#ff3b30] text-sm text-center">
-                  Could not load PDF preview.
-                </div>
-              )}
-            </div>
-          </div>
+    <article className="flex flex-col rounded-[30px] border border-line bg-paper p-6 transition-shadow hover:shadow-lg">
+      <h3 className="font-display text-lg uppercase tracking-[0.08em] text-ink" title={name}>
+        {name}
+      </h3>
+      {details.length > 0 && <p className="mt-1 text-sm text-muted">{details.join(" · ")}</p>}
+
+      {companies.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {companies.map((company) => (
+            <Tag key={company}>{company}</Tag>
+          ))}
         </div>
       )}
-      
-      {/* Confirmation Dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-medium text-[#1d1d1f] mb-2">Confirm Deletion</h3>
-            <p className="text-sm text-[#6e6e73] mb-6">
-              Are you sure you want to delete this resume? This action cannot be undone.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={handleCancelDelete}
-                className="px-4 py-2 text-sm text-[#0071e3] bg-white border border-[#d2d2d7] rounded-full hover:bg-gray-50 transition-colors"
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 text-sm text-white bg-[#ff3b30] rounded-full hover:bg-red-600 transition-colors"
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
+
+      <div className="mt-auto flex items-center gap-3 pt-6">
+        <Button size="sm" onClick={() => setViewing(true)} disabled={!signedPdfUrl}>
+          View resume
+        </Button>
+        {isAdmin && (
+          <Button size="sm" variant="ghost" className="text-danger hover:bg-danger/5" onClick={() => setConfirming(true)}>
+            Delete
+          </Button>
+        )}
+      </div>
+
+      <Modal open={viewing} onClose={() => setViewing(false)} title={name} size="lg">
+        <PdfViewer pdfUrl={signedPdfUrl} fileName={`${name}.pdf`} />
+      </Modal>
+
+      <Modal open={confirming} onClose={() => !deleting && setConfirming(false)} title="Delete resume">
+        <div className="space-y-5 p-6">
+          <p className="text-ink-soft">
+            Remove <span className="text-ink">{name}</span> from the resume book? The file is kept for 30 days before it is permanently removed.
+          </p>
+          <Notice tone="error">{deleteError}</Notice>
+          <div className="flex justify-end gap-3">
+            <Button size="sm" variant="outline" onClick={() => setConfirming(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="danger" onClick={handleDelete} disabled={deleting}>
+              {deleting ? "Deleting" : "Delete"}
+            </Button>
           </div>
         </div>
-      )}
-    </div>
+      </Modal>
+    </article>
   );
-} 
+}
