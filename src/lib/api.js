@@ -98,6 +98,10 @@ export const resumeAPI = {
     api.post('/resumes/backfill/contacts'),
 };
 
+export const alumniAPI = {
+  list: (params, config) => api.get('/alumni', { params, ...config }),
+};
+
 export const experienceAPI = {
   create: (data) => api.post('/experiences', data),
   getMyExperiences: () => api.get('/experiences'),

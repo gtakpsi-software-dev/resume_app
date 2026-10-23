@@ -55,7 +55,7 @@ export default function ResumeCard({ resume, onDelete }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex h-full flex-col rounded-[30px] border border-line bg-paper p-6 text-left transition hover:-translate-y-0.5 hover:border-ink hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        className="group flex h-full min-w-0 flex-col break-words rounded-[30px] border border-line bg-paper p-6 text-left transition hover:-translate-y-0.5 hover:border-ink hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         <div className="flex w-full items-start gap-4">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink font-display text-sm tracking-[0.08em] text-paper">
