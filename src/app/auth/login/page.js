@@ -4,85 +4,62 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
+import Button from "@/components/ui/Button";
+import { Input, Label } from "@/components/ui/Field";
+import Notice from "@/components/ui/Notice";
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
   const router = useRouter();
   const { adminLogin } = useAuth();
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
-    
     try {
       await adminLogin(password);
-      // Redirect to admin upload page on success
       router.push("/admin/upload");
     } catch (err) {
-      console.error("Admin login error:", err);
-      setError(
-        err.response?.data?.message || 
-        "Login failed. Please check your password."
-      );
+      setError(err.response?.data?.message || "Login failed. Please check your password.");
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   return (
-    <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-12 bg-[#f5f5f7]">
-      <div className="w-full max-w-md space-y-8 rounded-3xl bg-white p-8 shadow-sm">
-        <div className="text-center">
-          <h1 className="text-2xl font-medium text-[#1d1d1f]">Administrator Access</h1>
-          <p className="mt-2 text-sm text-[#6e6e73]">
-            Enter the admin password to access the resume management system
-          </p>
-        </div>
-        
-        {error && (
-          <div className="rounded-xl bg-red-50 p-4 text-sm text-red-500 border border-red-100">
-            {error}
+    <div className="flex flex-1 items-center justify-center bg-ink px-5 py-16">
+      <div className="w-full max-w-md rounded-[30px] bg-paper p-8 sm:p-10">
+        <p className="text-center text-xs uppercase tracking-[0.3em] text-muted">Chapter officers</p>
+        <h1 className="mt-2 text-center font-display text-2xl uppercase tracking-[0.08em]">Admin access</h1>
+
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <Notice tone="error">{error}</Notice>
+          <div>
+            <Label htmlFor="password">Admin password</Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div className="space-y-5">
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[#1d1d1f] mb-1">
-                Admin Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full appearance-none rounded-xl border border-[#d2d2d7] px-3 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#0071e3] focus:outline-none focus:ring-1 focus:ring-[#0071e3] sm:text-sm"
-                placeholder="Enter admin password"
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn-apple w-full py-2.5"
-            >
-              {isLoading ? 'Accessing...' : 'Access Admin Panel'}
-            </button>
-            
-            <Link href="/" className="flex justify-center text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors">
-              Return to home
-            </Link>
-          </div>
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? "Checking..." : "Continue"}
+          </Button>
         </form>
+
+        <p className="mt-8 text-center text-sm text-muted">
+          Not an officer?{" "}
+          <Link href="/auth/member-login" className="text-ink underline underline-offset-4">
+            Member sign in
+          </Link>
+        </p>
       </div>
     </div>
   );
-} 
+}
