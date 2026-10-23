@@ -91,7 +91,7 @@ export default function ResumeCard({ resume, onDelete }) {
         </div>
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={name} size="lg">
+      <Modal open={open} onClose={() => setOpen(false)} title={name} size="document">
         <div className="grid gap-6 p-6 lg:grid-cols-[260px_1fr]">
           <div className="space-y-6">
             {details.length > 0 && <p className="text-ink-soft">{details.join(" · ")}</p>}
