@@ -10,6 +10,9 @@ const { generateEmbeddings } = require('../utils/voyageService');
 const mongoose = require('mongoose');
 const pdfParse = require('pdf-parse');
 
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const toRegex = (value) => new RegExp(escapeRegex(value), 'i');
+
 const cosineSimilarity = (a = [], b = []) => {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || b.length === 0 || a.length !== b.length) {
     return -1;
@@ -451,7 +454,7 @@ const searchResumes = async (req, res) => {
 
     // General query search (searches across name, major, graduationYear, companies, keywords)
     if (query) {
-      const searchRegex = new RegExp(query, 'i');
+      const searchRegex = toRegex(query);
       resumeQuery.$or = [
         { name: searchRegex },
         { major: searchRegex },
@@ -461,15 +464,15 @@ const searchResumes = async (req, res) => {
 
     // Specific filters
     if (name) {
-      resumeQuery.name = new RegExp(name, 'i');
+      resumeQuery.name = toRegex(name);
     }
 
     if (major) {
       const majorList = major.split(',').map(m => m.trim()).filter(Boolean);
       if (majorList.length === 1) {
-        resumeQuery.major = new RegExp(majorList[0], 'i');
+        resumeQuery.major = toRegex(majorList[0]);
       } else {
-        resumeQuery.major = { $in: majorList.map(m => new RegExp(m, 'i')) };
+        resumeQuery.major = { $in: majorList.map(toRegex) };
       }
     }
 
@@ -487,7 +490,7 @@ const searchResumes = async (req, res) => {
     if (company) {
       const companyList = company.split(',').map(c => c.trim()).filter(Boolean);
       const companies = await Company.find({
-        name: { $in: companyList.map(c => new RegExp(c, 'i')) }
+        name: { $in: companyList.map(toRegex) }
       });
       if (companies.length > 0) {
         companyFilter = companies.map(c => c._id);
@@ -506,7 +509,7 @@ const searchResumes = async (req, res) => {
     if (keyword) {
       const keywordList = keyword.split(',').map(k => k.trim()).filter(Boolean);
       const keywords = await Keyword.find({
-        name: { $in: keywordList.map(k => new RegExp(k, 'i')) }
+        name: { $in: keywordList.map(toRegex) }
       });
       if (keywords.length > 0) {
         keywordFilter = keywords.map(k => k._id);
@@ -532,7 +535,7 @@ const searchResumes = async (req, res) => {
     // If general query includes company/keyword search, we need to handle it differently
     if (query && (query.includes('company') || query.includes('keyword'))) {
       // This is a simplified approach - for more complex searches, you might want to use aggregation
-      const searchRegex = new RegExp(query, 'i');
+      const searchRegex = toRegex(query);
       const matchingCompanies = await Company.find({ name: searchRegex });
       const matchingKeywords = await Keyword.find({ name: searchRegex });
 
