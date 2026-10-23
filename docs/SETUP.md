@@ -33,7 +33,13 @@ cd ..
 
 ## 2. Backend environment variables
 
-The backend needs a `.env` file. **This file is gitignored** — you have to create it yourself.
+The backend needs `backend/.env`. Copy the shareable template, then set your own values:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+`backend/.env` is gitignored. Share `backend/.env.example` with teammates through the repo; send real credentials through a secure channel.
 
 Create **`backend/.env`** with:
 
@@ -70,7 +76,13 @@ UPLOAD_LIMIT=10
 
 ## 3. Frontend environment variables
 
-The frontend needs a `.env.local` file. **This file is gitignored** — you have to create it yourself.
+The frontend needs `.env.local` in the project root. Copy its shareable template:
+
+```bash
+cp .env.example .env.local
+```
+
+`.env.local` is gitignored. The default API URL in `.env.example` works when the backend runs locally on port 5000.
 
 Create **`.env.local`** in the **project root** (same folder as `package.json`):
 

@@ -20,7 +20,7 @@ A web application for managing and searching through a collection of member resu
 
 ## Getting Started
 
-**First time on the project?** See **[SETUP.md](./SETUP.md)** for full instructions: env files, API keys, MongoDB, and how to run frontend + backend. The repo does not include `.env` or `.env.local` (they are gitignored).
+**First time on the project?** See **[SETUP.md](./docs/SETUP.md)** for full instructions: env files, API keys, MongoDB, and how to run frontend + backend. Copy `.env.example` to `.env.local` and `backend/.env.example` to `backend/.env`. The local files are gitignored; the examples can be shared.
 
 ### Quick start (after env is set up)
 
