@@ -39,12 +39,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Handle 401 Unauthorized errors (token expired, etc.)
-    if (error.response && error.response.status === 401) {
-      // Check if the failed request was NOT the login request
-      if (error.config.url !== '/auth/login') {
-        // Clear token and redirect to login if we're in a browser context
+    if (error.response?.status === 401) {
+      if (!error.config.url?.startsWith('/auth/')) {
         if (typeof window !== 'undefined') {
-          console.log('Interceptor: Unauthorized, redirecting to login');
           localStorage.removeItem('token');
           // Clear cookie if exists
           document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';

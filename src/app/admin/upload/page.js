@@ -1,16 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/AuthContext";
 import { resumeAPI } from "@/lib/api";
 import Link from "next/link";
 import AdminWrapper from "@/components/ui/AdminWrapper";
 
-export default function UploadPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-  
+function UploadPage() {
   const [files, setFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -51,12 +46,6 @@ export default function UploadPage() {
     const remainingSeconds = seconds % 60;
     return `${minutes} minute${minutes !== 1 ? "s" : ""} ${remainingSeconds > 0 ? `and ${remainingSeconds} seconds` : ""}`;
   };
-  
-  // Redirect if not admin
-  if (!isLoading && (!isAuthenticated || user?.role !== "admin")) {
-    router.push("/auth/login");
-    return null;
-  }
   
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -249,14 +238,6 @@ export default function UploadPage() {
       setIsBackfillingContacts(false);
     }
   };
-  
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-      </div>
-    );
-  }
   
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -467,7 +448,7 @@ export default function UploadPage() {
   );
 }
 
-export function ProtectedUploadPage() {
+export default function ProtectedUploadPage() {
   return (
     <AdminWrapper>
       <UploadPage />

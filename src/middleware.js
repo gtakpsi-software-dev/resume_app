@@ -19,10 +19,6 @@ export function middleware(request) {
     pathname.startsWith(path)
   );
   
-  // Debugging
-  console.log('Path:', pathname);
-  console.log('Admin Token:', adminToken ? 'Present' : 'Missing');
-  
   // If the path requires admin auth and there's no admin token, redirect to admin login
   if (requiresAdminAuth && !adminToken) {
     const url = new URL('/auth/login', request.url);

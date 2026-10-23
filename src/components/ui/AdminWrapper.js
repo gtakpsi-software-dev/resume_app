@@ -2,12 +2,19 @@
 
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function AdminWrapper({ children }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const allowed = isAuthenticated && user?.role === "admin";
 
-  // If still loading, show a spinner
+  useEffect(() => {
+    if (!isLoading && !allowed) {
+      router.push("/auth/login");
+    }
+  }, [isLoading, allowed, router]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -16,12 +23,9 @@ export default function AdminWrapper({ children }) {
     );
   }
 
-  // If not authenticated or not an admin, redirect to admin login
-  if (!isAuthenticated || user?.role !== "admin") {
-    router.push("/auth/login");
+  if (!allowed) {
     return null;
   }
 
-  // User is authenticated and is an admin
   return <>{children}</>;
 } 

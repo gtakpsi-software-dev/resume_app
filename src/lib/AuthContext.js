@@ -47,7 +47,9 @@ export function AuthProvider({ children }) {
       
       try {
         const { data } = await authAPI.getCurrentUser();
-        setUser(data.data);
+        if (data?.data?.role === 'admin') {
+          setUser(data.data);
+        }
       } catch (error) {
         // Handle error (token invalid, expired, etc.)
         localStorage.removeItem('token');
@@ -100,7 +102,7 @@ export function AuthProvider({ children }) {
   // Context value
   const value = {
     user,
-    isAuthenticated: !!user,
+    isAuthenticated: user?.role === 'admin',
     isLoading,
     adminLogin,
     logout,
