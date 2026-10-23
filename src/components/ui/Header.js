@@ -14,15 +14,6 @@ export default function Header() {
   const { user: memberUser, isAuthenticated: isMemberAuthenticated, isLoading: isMemberLoading, signOut: memberSignOut } = useMemberAuth();
   const [scrolled, setScrolled] = useState(false);
   
-  // Debug auth state
-  useEffect(() => {
-    console.log('Header component - Member auth state:', {
-      isAuthenticated: isMemberAuthenticated,
-      isLoading: isMemberLoading,
-      user: memberUser ? `${memberUser.email} (${memberUser.id})` : 'none'
-    });
-  }, [isMemberAuthenticated, isMemberLoading, memberUser]);
-  
   // Function to check if a path is active
   const isActive = (path) => {
     return pathname === path ? "text-[#0071e3]" : "";

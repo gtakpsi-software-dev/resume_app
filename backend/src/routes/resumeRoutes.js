@@ -16,14 +16,12 @@ const upload = require('../middleware/upload');
 
 const router = express.Router();
 
-// Public routes
-router.get('/search', searchResumes);
-router.get('/vector-search', vectorSearch);
-router.get('/filters', getFilters);
-router.get('/:id/file', getResumeFile);  // must be before /:id
-router.get('/:id', getResumeById);
+router.get('/search', authenticate, searchResumes);
+router.get('/vector-search', authenticate, vectorSearch);
+router.get('/filters', authenticate, getFilters);
+router.get('/:id/file', authenticate, getResumeFile);
+router.get('/:id', authenticate, getResumeById);
 
-// Protected routes
 router.post('/', authenticate, upload.single('file'), uploadResume);
 router.put('/:id', authenticate, updateResume);
 router.delete('/:id', authenticate, deleteResume);

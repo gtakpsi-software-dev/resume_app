@@ -15,13 +15,11 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { signIn, isAuthenticated } = useMemberAuth();
   
-  // Check if there's a redirect destination
-  const from = searchParams.get('from') || '/';
-  
-  // Redirect if already authenticated
+  const requested = searchParams.get('from') || '';
+  const from = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+
   useEffect(() => {
     if (isAuthenticated) {
-      console.log('Already authenticated, redirecting to:', from);
       router.push(from);
     }
   }, [isAuthenticated, router, from]);
@@ -33,12 +31,8 @@ function LoginForm() {
     
     try {
       await signIn(email, password);
-      console.log('Signed in successfully, redirecting to:', from);
-      
-      // Navigate to the original destination or home
       router.push(from);
     } catch (err) {
-      console.error("Login error:", err);
       const errorMessage = err.message || "Login failed. Please check your credentials.";
       setError(errorMessage);
     } finally {

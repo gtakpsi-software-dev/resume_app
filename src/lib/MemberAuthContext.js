@@ -31,15 +31,9 @@ export function MemberAuthProvider({ children }) {
         if (token) {
           // Try to fetch current user
           const response = await authAPI.getCurrentUser();
-          if (response.data && response.data.data) {
-            // Check if it's a member (not admin)
-            if (response.data.data.role === 'member') {
-              setUser(response.data.data);
-              document.documentElement.classList.add('authenticated');
-            } else {
-              // Admin token, clear it
-              localStorage.removeItem('token');
-            }
+          if (response.data?.data?.role === 'member') {
+            setUser(response.data.data);
+            document.documentElement.classList.add('authenticated');
           }
         }
       } catch (error) {
@@ -57,7 +51,6 @@ export function MemberAuthProvider({ children }) {
   // Sign in function
   const signIn = async (email, password) => {
     try {
-      console.log('Signing in member:', email);
       setIsLoading(true);
       
       const response = await authAPI.memberLogin(email, password);
@@ -79,7 +72,6 @@ export function MemberAuthProvider({ children }) {
       
       throw new Error('Invalid response from server');
     } catch (error) {
-      console.error('Sign in error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Sign in failed';
       throw new Error(errorMessage);
     } finally {
@@ -112,7 +104,6 @@ export function MemberAuthProvider({ children }) {
       
       throw new Error('Invalid response from server');
     } catch (error) {
-      console.error('Sign up error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
       throw new Error(errorMessage);
     } finally {

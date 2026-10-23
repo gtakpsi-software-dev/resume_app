@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMemberAuth } from '@/lib/MemberAuthContext';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -9,6 +9,7 @@ export default function ProtectedRoute({ children }) {
   const { isAuthenticated: memberIsAuthenticated, isLoading: memberIsLoading } = useMemberAuth();
   const { isAuthenticated: adminIsAuthenticated, isLoading: adminIsLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
   const isChecking = memberIsLoading || adminIsLoading;
@@ -20,10 +21,9 @@ export default function ProtectedRoute({ children }) {
 
   useEffect(() => {
     if (mounted && !isChecking && !isAllowed) {
-      console.log('ProtectedRoute: Not authenticated, redirecting to login');
-      router.push('/auth/member-login');
+      router.push(`/auth/member-login?from=${encodeURIComponent(pathname)}`);
     }
-  }, [isAllowed, isChecking, router, mounted]);
+  }, [isAllowed, isChecking, router, mounted, pathname]);
 
   // Show loading state or nothing while checking auth
   if (isChecking || !mounted || !isAllowed) {
