@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { resumeAPI } from "@/lib/api";
 import { BriefcaseIcon, AcademicCapIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
-// Dynamically import PdfViewer to avoid SSR issues
 const PdfViewer = dynamic(() => import("./PdfViewer"), {
   ssr: false,
   loading: () => (
@@ -134,7 +133,7 @@ export default function ResumeCard({ resume, onDelete }) {
             </div>
             <div className="flex-1 overflow-auto">
               {signedPdfUrl ? (
-                <PdfViewer pdfUrl={signedPdfUrl} />
+                <PdfViewer pdfUrl={signedPdfUrl} fileName={`${name}.pdf`} />
               ) : (
                 <div className="px-6 py-4 text-[#ff3b30] text-sm text-center">
                   Could not load PDF preview.

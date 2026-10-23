@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { resumeAPI } from "@/lib/api";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const ALUMNI_CUTOFF_YEAR = 2027;
 
@@ -14,7 +15,7 @@ const extractYear = (value) => {
   return Math.max(...numericYears);
 };
 
-export default function AlumniPage() {
+function AlumniPage() {
   const [selectedAlum, setSelectedAlum] = useState(null);
   const [alumni, setAlumni] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -199,3 +200,10 @@ export default function AlumniPage() {
   );
 }
 
+export default function ProtectedAlumniPage() {
+  return (
+    <ProtectedRoute>
+      <AlumniPage />
+    </ProtectedRoute>
+  );
+}
