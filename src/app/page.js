@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
-import MembersOnly from "@/components/home/MembersOnly";
+import HomeGate from "@/components/home/HomeGate";
 
 const sections = [
   {
     title: "Resumes",
-    href: "/search",
+    href: "/resumes",
     body: "Search every brother's resume by name, major, company, or skill, or describe who you are looking for and let AI search find them.",
   },
   {
@@ -23,7 +23,7 @@ const sections = [
 
 export default function Home() {
   return (
-    <>
+    <HomeGate>
       <section className="relative overflow-hidden bg-ink-deep text-paper">
         <Image
           src="/gtakpsi_logo.png"
@@ -40,7 +40,7 @@ export default function Home() {
             The Epsilon Sigma Chapter&apos;s resume book and alumni network.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <Button href="/search" variant="inverse" size="lg">
+            <Button href="/resumes" variant="inverse" size="lg">
               Search resumes
             </Button>
             <Button href="/alumni" variant="light" size="lg">
@@ -64,7 +64,22 @@ export default function Home() {
         </div>
       </section>
 
-      <MembersOnly />
-    </>
+      <section className="bg-ink text-paper">
+        <div className="mx-auto max-w-4xl px-5 py-16 text-center sm:px-8">
+          <h2 className="font-display text-2xl uppercase tracking-[0.08em]">Members only</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-paper/75">
+            Resumes and contact details are only visible to signed-in brothers. Ask a chapter officer for the access code to create your account.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Button href="/auth/member-login" variant="inverse">
+              Sign in
+            </Button>
+            <Button href="/auth/member-register" variant="light">
+              Create account
+            </Button>
+          </div>
+        </div>
+      </section>
+    </HomeGate>
   );
 }
