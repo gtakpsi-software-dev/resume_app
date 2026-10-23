@@ -167,6 +167,10 @@ function streamFileToBuffer(fileId) {
         reject(err);
       }
     });
+  });
+}
+
+/**
  * Download a GridFS file into a Buffer.
  * @param {import('mongodb').ObjectId} fileId
  * @returns {Promise<Buffer>}

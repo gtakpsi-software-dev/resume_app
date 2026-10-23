@@ -8,7 +8,7 @@ const {
   deleteResume,
   deleteAllResumes,
   getFilters,
-  vectorSearch
+  vectorSearch,
   backfillResumeContacts,
 } = require('../controllers/resumeController');
 const { authenticate, isAdmin } = require('../middleware/auth');
