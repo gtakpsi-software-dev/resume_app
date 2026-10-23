@@ -1124,6 +1124,6 @@ module.exports = {
   deleteResume,
   deleteAllResumes,
   getFilters,
-  vectorSearch
+  vectorSearch,
   backfillResumeContacts,
 };
