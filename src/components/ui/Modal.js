@@ -17,7 +17,12 @@ export default function Modal({ open, onClose, title, children, size = "md" }) {
 
   if (!open) return null;
 
-  const width = size === "lg" ? "max-w-5xl" : "max-w-md";
+  const widths = {
+    md: "max-w-md",
+    lg: "max-w-5xl",
+    document: "max-w-5xl lg:max-w-[calc((92vh-11rem)*0.773+21rem)]",
+  };
+  const width = widths[size] || widths.md;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/70 p-4 backdrop-blur-sm" onClick={onClose}>

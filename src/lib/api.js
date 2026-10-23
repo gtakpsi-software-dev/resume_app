@@ -67,9 +67,7 @@ export const resumeAPI = {
       'Content-Type': 'multipart/form-data',
     },
   }),
-  getAll: (params) => api.get('/resumes/search', { params }),
-  vectorSearch: (query) => api.get('/resumes/vector-search', { params: { query } }),
-  getFilters: () => api.get('/resumes/filters'),
+  search: (params, config) => api.get('/resumes/search', { params, ...config }),
   getById: (id) => api.get(`/resumes/${id}`),
   create: (resumeData, file) => {
     const formData = new FormData();

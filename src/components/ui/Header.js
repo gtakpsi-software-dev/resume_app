@@ -17,7 +17,7 @@ export default function Header() {
   useEffect(() => setMenuOpen(false), [pathname]);
 
   const links = [
-    { href: "/search", label: "Resumes" },
+    { href: "/resumes", label: "Resumes" },
     { href: "/alumni", label: "Alumni" },
     ...(isMember ? [{ href: "/dashboard", label: "Experiences" }] : []),
     ...(isAdmin ? [{ href: "/admin/upload", label: "Upload" }] : []),

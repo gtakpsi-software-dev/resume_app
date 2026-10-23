@@ -9,16 +9,6 @@ import EmptyState from "@/components/ui/EmptyState";
 import Notice from "@/components/ui/Notice";
 import Modal from "@/components/ui/Modal";
 
-const alumniCutoffYear = () => {
-  const now = new Date();
-  return now.getMonth() > 4 ? now.getFullYear() : now.getFullYear() - 1;
-};
-
-const extractYear = (value) => {
-  const years = String(value || "").match(/\b(19|20)\d{2}\b/g);
-  return years ? Math.max(...years.map(Number)) : null;
-};
-
 const initials = (name) =>
   name
     .split(/\s+/)
@@ -48,33 +38,25 @@ function AlumniPage() {
   const [selected, setSelected] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const cutoff = alumniCutoffYear();
-
   useEffect(() => {
     resumeAPI
-      .getAll()
-      .then(({ data }) => {
-        const records = (data?.data || [])
-          .map((resume) => {
-            const year = extractYear(resume.graduationYear);
-            if (!year || year > cutoff) return null;
-            return {
-              id: resume.id,
-              name: resume.name || "Unknown",
-              gradYear: year,
-              company: resume.companies?.[0] || "",
-              email: resume.email || "",
-              phone: resume.phone || "",
-              linkedin: resume.linkedin || "",
-            };
-          })
-          .filter(Boolean)
-          .sort((a, b) => b.gradYear - a.gradYear || a.name.localeCompare(b.name));
-        setAlumni(records);
-      })
+      .search({ status: "alumni", sort: "class" })
+      .then(({ data }) =>
+        setAlumni(
+          (data?.data || []).map((resume) => ({
+            id: resume.id,
+            name: resume.name || "Unknown",
+            gradYear: resume.graduationYear,
+            company: resume.companies?.[0] || "",
+            email: resume.email || "",
+            phone: resume.phone || "",
+            linkedin: /^https?:\/\//i.test(resume.linkedin || "") ? resume.linkedin : "",
+          }))
+        )
+      )
       .catch(() => setError("Unable to load alumni right now."))
       .finally(() => setIsLoading(false));
-  }, [cutoff]);
+  }, []);
 
   const close = useCallback(() => setSelected(null), []);
   const hasContact = selected && (selected.email || selected.phone || selected.linkedin);
@@ -93,7 +75,7 @@ function AlumniPage() {
         ) : error ? (
           <Notice tone="error">{error}</Notice>
         ) : alumni.length === 0 ? (
-          <EmptyState title="No alumni yet" description={`Brothers who graduated in ${cutoff} or earlier will show up here.`} />
+          <EmptyState title="No alumni yet" description="Brothers show up here once their graduation year has passed." />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {alumni.map((alum) => (
