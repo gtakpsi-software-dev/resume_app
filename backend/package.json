@@ -8,6 +8,7 @@
     "seed": "node src/scripts/seed.js",
     "backfill:contacts": "node src/scripts/backfillResumeContacts.js",
     "embeddings:generate": "node src/scripts/generateEmbeddings.js",
+    "alumni:import": "node src/scripts/importAlumni.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -19,6 +20,7 @@
     "axios": "^1.15.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.1",
