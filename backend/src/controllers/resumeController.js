@@ -31,70 +31,25 @@ const cosineSimilarity = (a = [], b = []) => {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 };
 
-/**
- * Format text in title case (first letter of each word capitalized, rest lowercase)
- * @param {string} text - The text to format
- * @returns {string} - Properly formatted text
- */
-const formatTitleCase = (text) => {
-  if (!text) return '';
+const caseInsensitive = { locale: 'en', strength: 2 };
 
-  // Handle special cases for company abbreviations
-  const commonAbbreviations = ['LLC', 'LLP', 'Inc', 'Corp', 'Ltd', 'Co', 'USA', 'US', 'UK', 'AI', 'IT', 'IBM', 'HP', 'AWS', 'GE'];
-  const commonLowercase = ['of', 'the', 'and', 'a', 'an', 'in', 'on', 'at', 'by', 'for', 'with', 'to'];
-
-  // Split by spaces and format each word
-  return text.split(' ')
-    .map((word, index) => {
-      // Check if the word is a common abbreviation (case sensitive)
-      if (commonAbbreviations.includes(word.toUpperCase())) {
-        return word.toUpperCase();
-      }
-
-      // For articles, prepositions, and conjunctions, keep lowercase unless it's the first word
-      if (index > 0 && commonLowercase.includes(word.toLowerCase())) {
-        return word.toLowerCase();
-      }
-
-      // Default formatting: first letter uppercase, rest lowercase
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(' ');
-};
-
-// Helper function to find or create companies
-const findOrCreateCompanies = async (companyNames) => {
-  if (!companyNames || !companyNames.length) return [];
-
-  const companies = [];
-  for (const name of companyNames) {
-    // Format company name in title case
-    const formattedName = formatTitleCase(name.trim());
-
-    let company = await Company.findOne({ name: formattedName });
-    if (!company) {
-      company = await Company.create({ name: formattedName });
+const findOrCreateByName = async (Model, names) => {
+  const docs = [];
+  for (const raw of names || []) {
+    const name = String(raw).trim();
+    if (!name) continue;
+    try {
+      docs.push(await Model.findOneAndUpdate({ name }, { $setOnInsert: { name } }, { upsert: true, new: true, collation: caseInsensitive }));
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      docs.push(await Model.findOne({ name }).collation(caseInsensitive));
     }
-    companies.push(company);
   }
-  return companies;
+  return docs;
 };
 
-// Helper function to find or create keywords
-const findOrCreateKeywords = async (keywordNames) => {
-  if (!keywordNames || !keywordNames.length) return [];
-
-  const keywords = [];
-  for (const name of keywordNames) {
-    const trimmedName = name.trim();
-    let keyword = await Keyword.findOne({ name: trimmedName });
-    if (!keyword) {
-      keyword = await Keyword.create({ name: trimmedName });
-    }
-    keywords.push(keyword);
-  }
-  return keywords;
-};
+const findOrCreateCompanies = (names) => findOrCreateByName(Company, names);
+const findOrCreateKeywords = (names) => findOrCreateByName(Keyword, names);
 
 const extractContactInfo = (text) => {
   if (!text || typeof text !== 'string') {
@@ -452,13 +407,18 @@ const searchResumes = async (req, res) => {
     // Build MongoDB query
     const resumeQuery = { isActive: true };
 
-    // General query search (searches across name, major, graduationYear, companies, keywords)
     if (query) {
       const searchRegex = toRegex(query);
+      const [matchingCompanies, matchingKeywords] = await Promise.all([
+        Company.find({ name: searchRegex }).select('_id'),
+        Keyword.find({ name: searchRegex }).select('_id'),
+      ]);
       resumeQuery.$or = [
         { name: searchRegex },
         { major: searchRegex },
-        { graduationYear: searchRegex }
+        { graduationYear: searchRegex },
+        { companies: { $in: matchingCompanies.map(c => c._id) } },
+        { keywords: { $in: matchingKeywords.map(k => k._id) } },
       ];
     }
 
@@ -532,34 +492,8 @@ const searchResumes = async (req, res) => {
       resumeQuery.keywords = { $in: keywordFilter };
     }
 
-    // If general query includes company/keyword search, we need to handle it differently
-    if (query && (query.includes('company') || query.includes('keyword'))) {
-      // This is a simplified approach - for more complex searches, you might want to use aggregation
-      const searchRegex = toRegex(query);
-      const matchingCompanies = await Company.find({ name: searchRegex });
-      const matchingKeywords = await Keyword.find({ name: searchRegex });
-
-      if (matchingCompanies.length > 0 || matchingKeywords.length > 0) {
-        const orConditions = resumeQuery.$or || [];
-        if (matchingCompanies.length > 0) {
-          resumeQuery.$or = [
-            ...orConditions,
-            { companies: { $in: matchingCompanies.map(c => c._id) } }
-          ];
-        }
-        if (matchingKeywords.length > 0) {
-          resumeQuery.$or = [
-            ...(resumeQuery.$or || orConditions),
-            { keywords: { $in: matchingKeywords.map(k => k._id) } }
-          ];
-        }
-      }
-    }
-
-    console.log('Final Search Query:', JSON.stringify(resumeQuery, null, 2));
-
-    // Query the database with populate
     const resumes = await Resume.find(resumeQuery)
+      .select('-rawText -embedding')
       .populate('companies', 'name')
       .populate('keywords', 'name')
       .sort({ createdAt: -1 });
@@ -809,63 +743,22 @@ const deleteResume = async (req, res) => {
   }
 };
 
-// Delete all resumes (admin only)
 const deleteAllResumes = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    // Ensure the user is an admin
-    if (req.user.role !== 'admin') {
-      await session.abortTransaction();
-      await session.endSession();
-      return res.status(403).json({ error: true, message: 'Permission denied. Admin access required.' });
-    }
+    const { modifiedCount } = await Resume.updateMany(
+      { isActive: true },
+      { isActive: false, deletedAt: new Date() }
+    );
 
-    // Get all active resumes to delete their GridFS files
-    const allResumes = await Resume.find({ isActive: true })
-      .select('fileId')
-      .session(session);
-
-    if (allResumes.length === 0) {
-      await session.abortTransaction();
-      await session.endSession();
+    if (!modifiedCount) {
       return res.status(404).json({ error: true, message: 'No active resumes found to delete.' });
     }
 
-    // Soft delete all resumes
-    await Resume.updateMany(
-      { isActive: true },
-      { isActive: false },
-      { session }
-    );
-
-    // Delete all files from GridFS
-    const deletePromises = allResumes.map(resume => {
-      if (resume.fileId) {
-        return deleteFromGridFS(resume.fileId).catch(err => {
-          console.error(`Error deleting GridFS file ${resume.fileId}:`, err);
-          return Promise.resolve();
-        });
-      }
-      return Promise.resolve();
-    });
-
-    await Promise.all(deletePromises);
-
-    // Commit transaction
-    await session.commitTransaction();
-    await session.endSession();
-
     res.status(200).json({
       error: false,
-      message: `Successfully deleted ${allResumes.length} resumes.`
+      message: `Successfully deleted ${modifiedCount} resumes.`
     });
   } catch (error) {
-    // Roll back transaction on error
-    await session.abortTransaction();
-    await session.endSession();
-
     console.error('Delete all resumes error:', error);
     res.status(500).json({ error: true, message: 'Error deleting all resumes.' });
   }
@@ -901,26 +794,22 @@ const vectorSearch = async (req, res) => {
       return res.status(500).json({ error: true, message: 'Error processing search query.' });
     }
 
-    const parsedLimit = Math.max(1, parseInt(limit, 10) || 10);
+    const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
     let results = [];
 
-    // 2. Perform Atlas Vector Search
-    // Note: This requires a vector search index named 'vector_index' on the resumes collection
     try {
-      console.log('Starting aggregate with $vectorSearch...');
       results = await Resume.aggregate([
         {
           $vectorSearch: {
             index: 'vector_index',
             path: 'embedding',
             queryVector: queryEmbedding,
-            numCandidates: 100,
-            limit: parsedLimit
+            numCandidates: parsedLimit * 20,
+            limit: parsedLimit * 3
           }
         },
-        {
-          $match: { isActive: true }
-        },
+        { $match: { isActive: true } },
+        { $limit: parsedLimit },
         {
           $project: {
             _id: 1,
