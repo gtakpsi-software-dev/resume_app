@@ -1,8 +1,9 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
 const mongoose = require('mongoose');
 const pdfParse = require('pdf-parse');
 const { Resume } = require('../models');
 const { getBucket } = require('../utils/gridfs');
+const connectDB = require('../config/database');
 
 const extractContactInfo = (text) => {
   if (!text || typeof text !== 'string') {
@@ -42,8 +43,7 @@ const run = async () => {
     throw new Error('MONGODB_URI is required in backend/.env');
   }
 
-  await mongoose.connect(process.env.MONGODB_URI);
-  console.log('Connected to MongoDB');
+  await connectDB();
 
   const resumes = await Resume.find({ isActive: true }).select('name fileId email phone linkedin').lean();
   let updatedCount = 0;
