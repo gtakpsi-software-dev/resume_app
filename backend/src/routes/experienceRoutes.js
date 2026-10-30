@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, isMember } = require('../middleware/auth');
 const {
   createExperience,
   getMyExperiences,
@@ -11,8 +11,7 @@ const {
 
 const router = express.Router();
 
-// All routes require member authentication
-router.use(authenticate);
+router.use(authenticate, isMember);
 
 router.post('/', createExperience);
 router.get('/', getMyExperiences);

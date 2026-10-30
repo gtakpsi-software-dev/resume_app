@@ -380,10 +380,6 @@ const parseResumeWithGemini = async (text) => {
       // Remove markdown code blocks if present
       jsonStr = responseText.replace(/```json|```/g, '').trim();
 
-      // Fix common JSON formatting issues
-      jsonStr = jsonStr.replace(/(\w+):\s*(?!")/g, '"$1": ');  // Add quotes to keys without them
-      jsonStr = jsonStr.replace(/:\s*'([^']*)'/g, ': "$1"');  // Replace single quotes with double quotes
-
       // Ensure the string is a valid JSON object
       if (!jsonStr.startsWith('{')) jsonStr = '{' + jsonStr;
       if (!jsonStr.endsWith('}')) jsonStr = jsonStr + '}';
@@ -557,21 +553,29 @@ const parseResume = async (fileBuffer, name) => {
       };
     }
 
-    // Parse with Gemini AI
-    const result = await parseResumeWithGemini(text);
+    let result;
+    try {
+      result = await parseResumeWithGemini(text);
+    } catch (error) {
+      console.error('Gemini parsing failed, using fallback fields:', error.message);
+      result = {
+        name: (name || 'Unknown').replace(/[_-]+/g, ' ').trim(),
+        major: 'Unspecified',
+        graduationYear: 'Unspecified',
+        companies: [],
+        keywords: []
+      };
+    }
+
     const contactInfo = extractContactInfo(text);
-    
-    const mergedResult = {
+
+    return {
       ...result,
       email: contactInfo.email || '',
       phone: contactInfo.phone || '',
       linkedin: contactInfo.linkedin || '',
+      rawText: text,
     };
-
-    // Log the final result for debugging
-    console.log('Final resume parsing result:', mergedResult);
-
-    return mergedResult;
   } catch (error) {
     console.error('Error parsing resume:', error);
     // Return default values rather than throwing error

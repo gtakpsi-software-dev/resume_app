@@ -1,13 +1,12 @@
 const mongoose = require('mongoose');
 const { Resume } = require('../models');
 const { generateEmbeddings } = require('../utils/voyageService');
-const { streamFileToBuffer } = require('../utils/gridfs');
+const { readFileToBuffer } = require('../utils/gridfs');
+const connectDB = require('../config/database');
 const pdfParse = require('pdf-parse');
 const path = require('path');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
-
-const MONGO_URI = process.env.MONGODB_URI;
 
 /**
  * Throttled script to generate embeddings for existing resumes.
@@ -16,7 +15,7 @@ const MONGO_URI = process.env.MONGODB_URI;
 async function generateEmbeddingsForExisting() {
     try {
         console.log('Connecting to MongoDB...');
-        await mongoose.connect(MONGO_URI);
+        await connectDB();
         console.log('Connected to MongoDB.');
 
         // Find all resumes that don't have embeddings or raw text
@@ -42,7 +41,7 @@ async function generateEmbeddingsForExisting() {
                 if (!text && resume.fileId) {
                     console.log(`  Extracting text from GridFS file: ${resume.fileId}`);
                     try {
-                        const buffer = await streamFileToBuffer(resume.fileId);
+                        const buffer = await readFileToBuffer(resume.fileId);
                         const pdfData = await pdfParse(buffer);
                         text = pdfData.text;
                         resume.rawText = text;

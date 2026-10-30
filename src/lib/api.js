@@ -1,17 +1,13 @@
 import axios from 'axios';
 
-// Normalize backend base URL so it always includes `/api`
 const rawBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const normalizedBaseUrl = (() => {
   if (!rawBaseUrl) return '';
-  // Remove any trailing slash
   const trimmed = rawBaseUrl.replace(/\/+$/, '');
-  // If it already ends with /api, use as-is; otherwise append /api
   if (trimmed.endsWith('/api')) return trimmed;
   return `${trimmed}/api`;
 })();
 
-// Create an axios instance with default config
 const api = axios.create({
   baseURL: normalizedBaseUrl,
   headers: {
@@ -19,10 +15,8 @@ const api = axios.create({
   },
 });
 
-// Add a request interceptor to attach the auth token to requests
 api.interceptors.request.use(
   (config) => {
-    // Get token from localStorage if we're in a browser context
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) {
@@ -34,30 +28,22 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add a response interceptor to handle common errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized errors (token expired, etc.)
-    if (error.response && error.response.status === 401) {
-      // Check if the failed request was NOT the login request
-      if (error.config.url !== '/auth/login') {
-        // Clear token and redirect to login if we're in a browser context
+    if (error.response?.status === 401) {
+      if (!error.config.url?.startsWith('/auth/')) {
         if (typeof window !== 'undefined') {
-          console.log('Interceptor: Unauthorized, redirecting to login');
           localStorage.removeItem('token');
-          // Clear cookie if exists
           document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-          window.location.href = '/auth/member-login'; // Redirect to member login page
+          window.location.href = '/auth/member-login';
         }
       }
     }
-    // For login errors, just reject the promise so the calling function can handle it
     return Promise.reject(error);
   }
 );
 
-// Auth-related API calls
 export const authAPI = {
   adminLogin: (password) =>
     api.post('/auth/admin/login', { password }),
@@ -65,34 +51,27 @@ export const authAPI = {
   getCurrentUser: () =>
     api.get('/auth/me'),
 
-  // Member login (email + password)
   memberLogin: (email, password) =>
     api.post('/auth/member/login', { email, password }),
 
-  // Unified login (handles both admin and member)
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
 
-  // Member registration
   register: (userData) =>
     api.post('/auth/register', userData),
 };
 
-// Resume-related API calls
 export const resumeAPI = {
   upload: (formData) => api.post('/resumes', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   }),
-  getAll: (params) => api.get('/resumes/search', { params }),
-  vectorSearch: (query) => api.get('/resumes/vector-search', { params: { query } }),
-  getFilters: () => api.get('/resumes/filters'),
+  search: (params, config) => api.get('/resumes/search', { params, ...config }),
   getById: (id) => api.get(`/resumes/${id}`),
   create: (resumeData, file) => {
     const formData = new FormData();
 
-    // Add resume metadata if provided
     if (resumeData) {
       Object.keys(resumeData).forEach(key => {
         if (resumeData[key]) {
@@ -101,7 +80,6 @@ export const resumeAPI = {
       });
     }
 
-    // Add the PDF file
     formData.append('file', file);
 
     return api.post('/resumes', formData, {
@@ -120,25 +98,10 @@ export const resumeAPI = {
     api.post('/resumes/backfill/contacts'),
 };
 
-// Companies-related API calls
-export const companyAPI = {
-  getAll: () =>
-    api.get('/companies'),
-
-  create: (name) =>
-    api.post('/companies', { name }),
+export const alumniAPI = {
+  list: (params, config) => api.get('/alumni', { params, ...config }),
 };
 
-// Keywords-related API calls
-export const keywordAPI = {
-  getAll: () =>
-    api.get('/keywords'),
-
-  create: (name) =>
-    api.post('/keywords', { name }),
-};
-
-// Experience-related API calls (interviews, internships, research)
 export const experienceAPI = {
   create: (data) => api.post('/experiences', data),
   getMyExperiences: () => api.get('/experiences'),

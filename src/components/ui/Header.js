@@ -1,205 +1,105 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/lib/AuthContext";
 import { useMemberAuth } from "@/lib/MemberAuthContext";
-import LogoutButton from "./LogoutButton";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const { user: memberUser, isAuthenticated: isMemberAuthenticated, isLoading: isMemberLoading, signOut: memberSignOut } = useMemberAuth();
-  const [scrolled, setScrolled] = useState(false);
-  
-  // Debug auth state
-  useEffect(() => {
-    console.log('Header component - Member auth state:', {
-      isAuthenticated: isMemberAuthenticated,
-      isLoading: isMemberLoading,
-      user: memberUser ? `${memberUser.email} (${memberUser.id})` : 'none'
-    });
-  }, [isMemberAuthenticated, isMemberLoading, memberUser]);
-  
-  // Function to check if a path is active
-  const isActive = (path) => {
-    return pathname === path ? "text-[#0071e3]" : "";
-  };
+  const { isAuthenticated: isAdmin, isLoading: adminLoading, logout } = useAuth();
+  const { user: member, isAuthenticated: isMember, isLoading: memberLoading, signOut } = useMemberAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Check if user is admin
-  const isAdmin = user?.role === "admin";
+  useEffect(() => setMenuOpen(false), [pathname]);
 
-  // Handle resume search button click
-  const handleResumeSearchClick = (e) => {
-    e.preventDefault();
-    // Allow access if member or admin is authenticated.
-    const memberLoggedIn = isMemberAuthenticated && !isMemberLoading;
-    const adminLoggedIn = isAuthenticated && !isLoading;
+  const links = [
+    { href: "/resumes", label: "Resumes" },
+    { href: "/alumni", label: "Alumni" },
+    ...(isMember ? [{ href: "/dashboard", label: "Experiences" }] : []),
+    ...(isAdmin ? [{ href: "/admin/upload", label: "Upload" }] : []),
+  ];
 
-    if (memberLoggedIn || adminLoggedIn) {
-      router.push('/search');
-    } else if (!isMemberLoading && !isLoading) {
-      // Neither member nor admin is logged in – send to member login
-      router.push('/auth/member-login');
-    }
-  };
-
-  // Handle sign out
   const handleSignOut = async () => {
-    try {
-      await memberSignOut();
-      // Navigate to the homepage without a full reload to avoid flicker
-      router.push('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    if (isAdmin) logout();
+    else await signOut();
+    router.push("/");
   };
 
-  // Apply scrolled styles to header
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 10) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
-    };
+  const loading = adminLoading || memberLoading;
+  const signedIn = isAdmin || isMember;
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const navText = "font-display text-sm uppercase tracking-[0.18em] transition-colors";
+  const linkClass = (href) =>
+    `${navText} ${pathname.startsWith(href) ? "text-paper" : "text-paper/60 hover:text-paper"}`;
+
+  const account = loading ? (
+    <div className="h-4 w-20 animate-pulse rounded-full bg-paper/20" />
+  ) : signedIn ? (
+    <div className="flex items-center gap-5">
+      <span className="hidden text-sm text-paper/60 lg:inline">{isAdmin ? "Admin" : member?.email}</span>
+      <button type="button" onClick={handleSignOut} className={`${navText} text-paper/60 hover:text-paper`}>
+        Sign out
+      </button>
+    </div>
+  ) : (
+    <div className="flex items-center gap-5">
+      <Link href="/auth/member-login" className={linkClass("/auth/member-login")}>
+        Sign in
+      </Link>
+      <Link
+        href="/auth/member-register"
+        className={`${navText} rounded-full border border-paper/70 px-4 py-1.5 text-paper hover:bg-paper hover:text-ink`}
+      >
+        Join
+      </Link>
+    </div>
+  );
 
   return (
-    <header className={`sticky top-0 z-40 w-full transition-all duration-300 ${scrolled ? "bg-white/80 backdrop-blur-md shadow-sm" : "bg-white"}`}>
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Top">
-        <div className="py-3 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <span className="text-[#1d1d1f] font-semibold text-lg">GT Alpha Kappa Psi</span>
-            </Link>
-            <div className="hidden ml-10 space-x-8 md:flex">
-              <Link 
-                href="/search" 
-                className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/search')}`}
-                onClick={handleResumeSearchClick}
-              >
-                Resume Search
-              </Link>
-              <Link 
-                href="/alumni" 
-                className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/alumni')}`}
-              >
-                Alumni
-              </Link>
-              
-              {isMemberAuthenticated && (
-                <Link 
-                  href="/dashboard" 
-                  className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
-                >
-                  Brother Experiences
-                </Link>
-              )}
-              
-              {isAdmin && (
-                <Link 
-                  href="/admin/upload" 
-                  className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/admin/upload')}`}
-                >
-                  Upload
-                </Link>
-              )}
-            </div>
-          </div>
+    <header className="sticky top-0 z-40 bg-ink text-paper">
+      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8" aria-label="Main">
+        <Link href="/" className="flex items-baseline gap-2">
+          <span className="font-display text-xl tracking-[0.1em]">ΑΚΨ</span>
+          <span className="hidden font-display text-xs uppercase tracking-[0.3em] text-paper/60 sm:inline">Georgia Tech</span>
+        </Link>
 
-          <div className="flex items-center space-x-4">
-            {/* Member User Authentication */}
-            {!isAuthenticated && (
-              <>
-                {isMemberLoading ? (
-                  <div className="h-8 w-20 animate-pulse rounded-full bg-gray-200"></div>
-                ) : isMemberAuthenticated ? (
-                  <div className="flex items-center space-x-4">
-                    <span className="text-sm text-[#1d1d1f]">
-                      {memberUser.email}
-                    </span>
-                    <button
-                      onClick={handleSignOut}
-                      className="text-sm text-[#0071e3] hover:text-[#0077ed] transition-colors"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-4">
-                    <Link
-                      href="/auth/member-login"
-                      className="text-sm font-medium text-[#0071e3] hover:text-[#0077ed] transition-colors"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      href="/auth/member-register"
-                      className="text-sm font-medium bg-[#0071e3] text-white hover:bg-[#0077ed] px-3 py-1 rounded-lg transition-colors"
-                    >
-                      Sign Up
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+        <div className="hidden items-center gap-8 md:flex">
+          {links.map((link) => (
+            <Link key={link.href} href={link.href} className={linkClass(link.href)}>
+              {link.label}
+            </Link>
+          ))}
+        </div>
 
-            {/* Admin Authentication - keep this separate */}
-            {isLoading ? (
-              <div className="h-8 w-6 animate-pulse rounded-full bg-gray-200"></div>
-            ) : isAuthenticated ? (
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-[#1d1d1f]">
-                  Admin Access
-                </span>
-                <LogoutButton />
-              </div>
-            ) : null}
-          </div>
-        </div>
-        
-        {/* Mobile menu */}
-        <div className="py-2 flex justify-center space-x-6 md:hidden border-t border-gray-100">
-          <Link 
-            href="/search" 
-            className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/search')}`}
-            onClick={handleResumeSearchClick}
-          >
-            Resume Search
-          </Link>
-          <Link 
-            href="/alumni" 
-            className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/alumni')}`}
-          >
-            Alumni
-          </Link>
-          
-          {isMemberAuthenticated && (
-            <Link 
-              href="/dashboard" 
-              className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/dashboard')}`}
-            >
-              Brother Experiences
-            </Link>
-          )}
-          
-          {isAdmin && (
-            <Link 
-              href="/admin/upload" 
-              className={`text-sm font-medium text-[#1d1d1f] hover:text-[#0071e3] transition-colors ${isActive('/admin/upload')}`}
-            >
-              Upload
-            </Link>
-          )}
-        </div>
+        <div className="hidden md:block">{account}</div>
+
+        <button
+          type="button"
+          className="rounded-full p-2 text-paper/80 hover:text-paper md:hidden"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
+        </button>
       </nav>
+
+      {menuOpen && (
+        <div className="border-t border-paper/10 px-5 pb-6 pt-4 md:hidden">
+          <div className="flex flex-col gap-4">
+            {links.map((link) => (
+              <Link key={link.href} href={link.href} className={linkClass(link.href)}>
+                {link.label}
+              </Link>
+            ))}
+          </div>
+          <div className="mt-6 border-t border-paper/10 pt-5">{account}</div>
+        </div>
+      )}
     </header>
   );
-} 
+}

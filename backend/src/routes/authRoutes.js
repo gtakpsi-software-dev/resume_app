@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { 
   adminLogin, 
   memberRegister, 
@@ -9,15 +10,19 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Admin routes
-router.post('/admin/login', adminLogin);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: true, message: 'Too many attempts. Try again in a few minutes.' },
+});
 
-// Member routes
-router.post('/register', memberRegister);
-router.post('/member/login', memberLogin);
+router.post('/admin/login', authLimiter, adminLogin);
+router.post('/register', authLimiter, memberRegister);
+router.post('/member/login', authLimiter, memberLogin);
 
-// Unified login endpoint - checks if it's admin (password only) or member (email + password)
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   
   // If only password provided, it's admin login
@@ -37,7 +42,6 @@ router.post('/login', async (req, res) => {
   });
 });
 
-// Get current user (works for both admin and members)
 router.get('/me', authenticate, getCurrentUser);
 router.get('/admin/profile', authenticate, getCurrentUser);
 

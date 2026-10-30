@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { GridFSBucket } = require('mongodb');
+const { GridFSBucket } = mongoose.mongo;
 
 const BUCKET_NAME = 'resumes';
 
@@ -42,76 +42,16 @@ function uploadFile(buffer, filename, contentType = 'application/pdf') {
   });
 }
 
-/**
- * Delete a file from GridFS.
- * Handles:
- * - Normal deletion
- * - "File not found" errors by cleaning up orphaned chunks
- * - Ensures fileId is a valid ObjectId
- * @param {import('mongodb').ObjectId | string} fileId
- */
-function deleteFile(fileId) {
-  return new Promise((resolve, reject) => {
-    const bucket = getBucket();
-
-    let objectId;
-    try {
-      objectId = new mongoose.Types.ObjectId(fileId);
-    } catch (err) {
-      console.error(`[GridFS] Invalid fileId provided for deletion: ${fileId}`, err);
-      return reject(err);
-    }
-
-    const handleNotFoundCleanup = async () => {
-      try {
-        const result = await mongoose.connection.db
-          .collection(`${BUCKET_NAME}.chunks`)
-          .deleteMany({ files_id: objectId });
-
-        console.warn(
-          `[GridFS] File not found for ${objectId}. Cleaned up ${result.deletedCount} orphaned chunks.`
-        );
-        resolve();
-      } catch (cleanupErr) {
-        console.error(
-          `[GridFS] Error cleaning up orphaned chunks for ${objectId}:`,
-          cleanupErr
-        );
-        reject(cleanupErr);
-      }
-    };
-
-    try {
-      bucket.delete(objectId, async (err) => {
-        if (!err) {
-          console.log(`Successfully deleted GridFS file ${objectId}`);
-          return resolve();
-        }
-
-        const isNotFound =
-          err.code === 'ENOENT' ||
-          (typeof err.message === 'string' && err.message.includes('File not found'));
-
-        if (isNotFound) {
-          return handleNotFoundCleanup();
-        }
-
-        console.error(`Error deleting GridFS file ${objectId}:`, err);
-        return reject(err);
-      });
-    } catch (err) {
-      const isNotFound =
-        err.code === 'ENOENT' ||
-        (typeof err.message === 'string' && err.message.includes('File not found'));
-
-      if (isNotFound) {
-        return handleNotFoundCleanup();
-      }
-
-      console.error(`[GridFS] Synchronous error while deleting file ${objectId}:`, err);
-      return reject(err);
-    }
-  });
+async function deleteFile(fileId) {
+  const objectId = new mongoose.Types.ObjectId(fileId);
+  try {
+    await getBucket().delete(objectId);
+  } catch (err) {
+    if (!String(err.message).includes('File not found')) throw err;
+    await mongoose.connection.db
+      .collection(`${BUCKET_NAME}.chunks`)
+      .deleteMany({ files_id: objectId });
+  }
 }
 
 /**
@@ -143,30 +83,6 @@ function streamFileToResponse(fileId, res) {
 }
 
 /**
- * Stream a file from GridFS to a Buffer.
- * @param {import('mongodb').ObjectId} fileId
- * @returns {Promise<Buffer>}
- */
-function streamFileToBuffer(fileId) {
-  const { PassThrough } = require('stream');
-  return new Promise((resolve, reject) => {
-    const bucket = getBucket();
-    const downloadStream = bucket.openDownloadStream(fileId);
-    const chunks = [];
-    const passThrough = new PassThrough();
-
-    passThrough.on('data', (chunk) => chunks.push(chunk));
-    passThrough.on('end', () => resolve(Buffer.concat(chunks)));
-    passThrough.on('error', reject);
-
-    downloadStream.pipe(passThrough);
-    downloadStream.on('error', (err) => {
-      if (err.code === 'ENOENT' || (err.message && err.message.includes('File not found'))) {
-        reject(new Error('File not found in GridFS'));
-      } else {
-        reject(err);
-      }
-    });
  * Download a GridFS file into a Buffer.
  * @param {import('mongodb').ObjectId} fileId
  * @returns {Promise<Buffer>}
@@ -188,7 +104,6 @@ module.exports = {
   uploadFile,
   deleteFile,
   streamFileToResponse,
-  streamFileToBuffer,
   readFileToBuffer,
   BUCKET_NAME,
 };

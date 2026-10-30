@@ -58,12 +58,22 @@ MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@gtakpsi-db.fuousxc.mongodb.net
 # Everyone on the team can use the same value so tokens work across dev machines
 JWT_SECRET=your_jwt_secret_here_ask_lead_for_team_value
 
+# Admin password and member sign-up access code. Ask a lead for the real values.
+ADMIN_PASSWORD=ask_lead
+MEMBER_ACCESS_CODE=ask_lead
+
 # Optional: max PDF upload size in MB (default 10)
 UPLOAD_LIMIT=10
 
 # Optional: only needed for AI-powered resume parsing (Gemini). If missing, parsing uses fallbacks.
 # Get a key at https://aistudio.google.com/app/apikey
 # GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: needed for AI semantic search (resume embeddings). Requires an Atlas Vector Search index named vector_index on resumes.embedding.
+# VOYAGE_API_KEY=your_voyage_api_key_here
+
+# Optional: set to "members" to show alumni email and phone to all signed-in members. Defaults to admins only.
+# ALUMNI_CONTACT_ACCESS=admins
 ```
 
 **Important:**
@@ -129,17 +139,31 @@ Open **http://localhost:3000**.
 
 ---
 
-## 6. Logins (don’t commit these; share via secure channel)
+## 6. Alumni data
 
-- **Admin:** Use the admin login page. The password is set in the backend code (ask a lead; it’s not in this doc to avoid leaking it in the repo).
-- **Member sign-up:** New members need the **access code** to register. Ask a lead for the current code (it’s in the backend).
+The alumni directory is loaded from the chapter's spreadsheet export. Ask a lead for the CSV and never commit it.
+
+```bash
+cd backend
+npm run alumni:import -- /path/to/alumni.csv --dry-run
+npm run alumni:import -- /path/to/alumni.csv
+```
+
+See [alumni-data-mapping.md](./alumni-data-mapping.md) for how each column is cleaned and who can see it.
 
 ---
 
-## 7. Quick checklist
+## 7. Logins (don’t commit these; share via secure channel)
+
+- **Admin:** Use the admin login page with the `ADMIN_PASSWORD` from `backend/.env`. Admin login is disabled if it is unset.
+- **Member sign-up:** New members need the `MEMBER_ACCESS_CODE` from `backend/.env`. Registration is disabled if it is unset.
+
+---
+
+## 8. Quick checklist
 
 - [ ] Repo cloned, `npm install` run in root and in `backend`
-- [ ] **backend/.env** created with `MONGODB_URI`, `JWT_SECRET`, and optional `GEMINI_API_KEY`
+- [ ] **backend/.env** created with `MONGODB_URI`, `JWT_SECRET`, `ADMIN_PASSWORD`, `MEMBER_ACCESS_CODE`, and optional `GEMINI_API_KEY`
 - [ ] **.env.local** created in project root with `NEXT_PUBLIC_BACKEND_URL=http://localhost:5000/api`
 - [ ] MongoDB reachable (Atlas user + IP, or local MongoDB running)
 - [ ] Backend runs without errors (`npm run dev` in `backend`)

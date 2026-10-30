@@ -5,15 +5,13 @@ const { generateToken } = require('../utils/jwt');
 const adminLogin = async (req, res) => {
   try {
     const { password } = req.body;
-    
-    // Check if password matches the admin password
-    if (password === 'AyanIsAwesome') {
-      // Generate a simple session token (we can reuse JWT utils for this)
+
+    if (!process.env.ADMIN_PASSWORD) {
+      return res.status(503).json({ error: true, message: 'Admin login is not configured.' });
+    }
+
+    if (password === process.env.ADMIN_PASSWORD) {
       const token = generateToken({ role: 'admin', id: 'admin', email: 'admin' });
-      
-      console.log('Admin login successful');
-      
-      // Return success with token
       res.status(200).json({
         error: false,
         message: 'Admin login successful.',
@@ -23,7 +21,6 @@ const adminLogin = async (req, res) => {
         }
       });
     } else {
-      console.log('Admin login failed: Invalid password');
       res.status(401).json({ error: true, message: 'Invalid admin password.' });
     }
   } catch (error) {
@@ -45,8 +42,7 @@ const memberRegister = async (req, res) => {
       });
     }
 
-    // Verify access code
-    if (accessCode !== 'EpsilonSigma') {
+    if (!process.env.MEMBER_ACCESS_CODE || accessCode !== process.env.MEMBER_ACCESS_CODE) {
       return res.status(403).json({ 
         error: true, 
         message: 'Invalid access code.' 
